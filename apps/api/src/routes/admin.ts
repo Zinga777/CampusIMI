@@ -29,6 +29,11 @@ adminRoutes.post("/bootstrap", async (c) => {
 
 adminRoutes.use("*", requireAdmin);
 
+adminRoutes.get("/me", async (c) => {
+  const admin = c.get("admin")!;
+  return ok(c, { role: admin.role });
+});
+
 adminRoutes.get("/stats", async (c) => {
   const dayStart = new Date();
   dayStart.setUTCHours(0, 0, 0, 0);
@@ -131,6 +136,52 @@ adminRoutes.delete("/comments/:id", async (c) => {
   await c.env.DB.prepare(`DELETE FROM comments WHERE id = ?1`).bind(id).run();
   await logAdminAction(c.env, admin.userId, "delete_comment", "comment", id);
   return ok(c, { deleted: true });
+});
+
+adminRoutes.get("/posts", async (c) => {
+  const status = c.req.query("status");
+  const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
+  const query = status
+    ? `SELECT p.id, p.content, p.category, p.status, p.author_user_id as authorUserId,
+              p.like_count as likeCount, p.comment_count as commentCount, p.created_at as createdAt
+       FROM posts p WHERE p.status = ?1 ORDER BY p.created_at DESC LIMIT ?2`
+    : `SELECT p.id, p.content, p.category, p.status, p.author_user_id as authorUserId,
+              p.like_count as likeCount, p.comment_count as commentCount, p.created_at as createdAt
+       FROM posts p ORDER BY p.created_at DESC LIMIT ?1`;
+  const stmt = status ? c.env.DB.prepare(query).bind(status, limit) : c.env.DB.prepare(query).bind(limit);
+  const { results } = await stmt.all();
+  return ok(c, { posts: results });
+});
+
+adminRoutes.get("/comments", async (c) => {
+  const status = c.req.query("status");
+  const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
+  const query = status
+    ? `SELECT id, post_id as postId, content, status, author_user_id as authorUserId, created_at as createdAt
+       FROM comments WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2`
+    : `SELECT id, post_id as postId, content, status, author_user_id as authorUserId, created_at as createdAt
+       FROM comments ORDER BY created_at DESC LIMIT ?1`;
+  const stmt = status ? c.env.DB.prepare(query).bind(status, limit) : c.env.DB.prepare(query).bind(limit);
+  const { results } = await stmt.all();
+  return ok(c, { comments: results });
+});
+
+adminRoutes.get("/events", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, title, location, starts_at as startsAt, status, created_by_user_id as createdByUserId, created_at as createdAt
+     FROM events ORDER BY starts_at DESC LIMIT 100`,
+  ).all();
+  return ok(c, { events: results });
+});
+
+adminRoutes.post("/events/:id/remove", async (c) => {
+  const admin = c.get("admin")!;
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare(`SELECT id FROM events WHERE id = ?1`).bind(id).first();
+  if (!row) return fail(c, "NOT_FOUND", "Event not found.", 404);
+  await c.env.DB.prepare(`UPDATE events SET status = 'removed' WHERE id = ?1`).bind(id).run();
+  await logAdminAction(c.env, admin.userId, "remove_event", "event", id);
+  return ok(c, { status: "removed" });
 });
 
 adminRoutes.get("/users", async (c) => {

@@ -366,3 +366,14 @@ For now:
   an "I'm interested" toggle, linked from the feed header. Verified end-to-end against
   `wrangler dev --local` (create → list → mark/unmark interested, counts and viewer
   state updating correctly) and exercised in a real headless-browser session.
+- **Phase 9 (Admin & analytics):** done. Rounded out Phase 4's admin API with
+  `GET /admin/me` (frontend admin-check), `GET /admin/posts` / `GET /admin/comments`
+  (browsable moderation lists beyond just the report queue), and `GET /admin/events` +
+  `POST /admin/events/:id/remove`. Built the `/admin` dashboard UI: Overview (live
+  stats), Reports (resolve/dismiss), Posts (hide/remove/restore), Users (suspend/
+  unsuspend), Audit Log — gated by an `AdminGuard` that calls `/admin/me` and redirects
+  non-admins back to the feed (never a client-side role flag). Verified end-to-end in a
+  real headless-browser session: an admin sees live overview stats and can resolve a
+  report (which then disappears from the open-reports list), while a non-admin account
+  hitting `/admin` directly is redirected to `/feed` — the same authorization the
+  backend enforces.
