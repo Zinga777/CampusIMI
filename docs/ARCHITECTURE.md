@@ -377,3 +377,18 @@ For now:
   report (which then disappears from the open-reports list), while a non-admin account
   hitting `/admin` directly is redirected to `/feed` — the same authorization the
   backend enforces.
+- **Seed data:** done. `seed/seed.ts` generates ~40 fake students (varied academic
+  status/gender/course/interests, correctly-hashed dev-only shared password), ~100
+  posts, ~150 comments, likes/reactions, a mix of confessions including two guaranteed
+  mutual pairs with an active match/conversation/messages, and a handful of campus
+  events, then applies it via `wrangler d1 execute --local`. Verified end-to-end: a
+  seeded student logs in with the documented dev password and sees a populated
+  trending feed, confessions, matches, and events; row counts confirmed directly
+  against the local D1 database.
+
+This completes the development sequence through the MVP priority list (spec §18,
+items 1–16) and the phase list (spec §17, Phases 1–9). **Phase 10 (security/production
+deployment) is intentionally deferred**, per the task's explicit scope — this
+repository has no remote git origin and nothing has been deployed to Cloudflare;
+everything above was built and verified entirely against `wrangler dev --local` and
+local D1/R2 emulation.

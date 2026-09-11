@@ -40,12 +40,26 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars   # local secrets, gitignored
 # apply D1 migrations to the local emulated database
 npm run db:migrate:local
 
-# (optional) load dev-only fake data
+# (optional) load dev-only fake data — run once against a fresh database;
+# it is not idempotent (re-running errors on duplicate emails, harmlessly)
 npm run seed:local
 
 # run the API (Worker, local D1/R2 emulation) and the web frontend together
 npm run dev
 ```
+
+### Dev-only seed data
+
+`npm run seed:local` (run from the repo root, or `apps/api`) generates ~40 fake
+students (varied academic status/gender/course/interests), ~100 posts, ~150 comments,
+likes/reactions, a mix of confessions (including a couple of guaranteed mutual pairs
+with an active match + conversation + messages), and a handful of campus events —
+then applies it to the local D1 database via `wrangler d1 execute --local`. Every
+seeded student shares the dev-only password `password123` (e.g. log in as
+`student1@college.edu` — check the script's console output for the exact seeded
+email, since domains are assigned randomly from `COLLEGE_EMAIL_DOMAINS`). This is
+clearly dev-only fake data — never real student information — and is meant to be run
+once against a freshly-migrated database.
 
 - API: http://127.0.0.1:8787 (proxied by the frontend dev server under `/api`)
 - Web: http://127.0.0.1:5173
