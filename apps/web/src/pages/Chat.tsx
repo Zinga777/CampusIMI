@@ -21,6 +21,7 @@ export default function Chat() {
   const [draft, setDraft] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const lastCreatedAtRef = useRef<string | null>(null);
@@ -63,16 +64,24 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function send() {
+  async function send(confirmWarning = false) {
     const text = draft.trim();
     if (!text || !conversationId || sending) return;
     setSending(true);
     setError(null);
     try {
-      const sent = await api.post<Message>(`/conversations/${conversationId}/messages`, { message: text });
-      setMessages((prev) => [...prev, sent]);
-      lastCreatedAtRef.current = sent.createdAt;
+      const res = await api.post<Message & { needsConfirmation?: boolean; warning?: string }>(
+        `/conversations/${conversationId}/messages`,
+        { message: text, confirmWarning },
+      );
+      if (res.needsConfirmation) {
+        setWarning(res.warning ?? null);
+        return;
+      }
+      setMessages((prev) => [...prev, res]);
+      lastCreatedAtRef.current = res.createdAt;
       setDraft("");
+      setWarning(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong.");
     } finally {
@@ -108,6 +117,25 @@ export default function Chat() {
 
       <div className="max-w-2xl mx-auto w-full px-6 pb-6">
         {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+        {warning && (
+          <div className="mb-3 rounded-lg bg-accent-400/15 border border-accent-400/30 px-4 py-3 text-sm text-campus-800">
+            <p>{warning}</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => send(true)}
+                className="px-3 py-1.5 rounded-full bg-campus-700 text-white text-xs font-medium"
+              >
+                Send anyway
+              </button>
+              <button
+                onClick={() => setWarning(null)}
+                className="px-3 py-1.5 rounded-full border border-campus-200 text-xs font-medium text-campus-700"
+              >
+                Edit message
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex gap-4 mb-2">
           <AiSuggestButton
             label="Conversation starter"
@@ -131,7 +159,7 @@ export default function Chat() {
             className="flex-1 rounded-full border border-campus-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-campus-400"
           />
           <button
-            onClick={send}
+            onClick={() => send()}
             disabled={sending}
             className="px-5 rounded-full bg-campus-700 text-white font-medium hover:bg-campus-800 disabled:opacity-50"
           >

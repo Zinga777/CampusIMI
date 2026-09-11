@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { fail, ok } from "../lib/response.js";
 import { randomId } from "../lib/crypto.js";
+import { detectSensitiveInfo } from "../lib/moderation.js";
 import { checkAndRecordRateLimit } from "../lib/rate-limit.js";
 import { requireProfile } from "../middleware/auth.js";
 import type { Env, Variables } from "../types.js";
@@ -96,11 +97,22 @@ conversationRoutes.post("/:id/messages", async (c) => {
     return fail(c, "FORBIDDEN", "You don't have access to this conversation.", 403);
   }
 
-  const body = (await c.req.json().catch(() => null)) as { message?: string } | null;
+  const body = (await c.req.json().catch(() => null)) as { message?: string; confirmWarning?: boolean } | null;
   const message = body?.message?.trim();
   if (!message) return fail(c, "EMPTY_MESSAGE", "Message can't be empty.");
   if (message.length > MAX_MESSAGE_LENGTH) {
     return fail(c, "MESSAGE_TOO_LONG", `Messages must be ${MAX_MESSAGE_LENGTH} characters or fewer.`);
+  }
+
+  // Never block a matched pair from choosing to exchange real contact info — just
+  // make sure it's a deliberate choice, since sharing this hands the other person a
+  // way to identify/track them outside the anonymous system.
+  const sensitive = detectSensitiveInfo(message);
+  if (sensitive.blocked && !body?.confirmWarning) {
+    return ok(c, {
+      needsConfirmation: true,
+      warning: `${sensitive.reason} Sharing this could let the other person identify or track you outside the app.`,
+    });
   }
 
   const rateLimit = await checkAndRecordRateLimit(c.env, user.id, "message");

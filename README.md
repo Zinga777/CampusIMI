@@ -195,6 +195,10 @@ All four currently pass clean. Run them after any change before considering it d
 - Avatar uploads verify the file's actual magic bytes match the claimed image type
   (don't trust `Content-Type` alone), and are served with `X-Content-Type-Options:
   nosniff`.
+- Matched/chat messages run the same `detectSensitiveInfo` check as posts (warn +
+  "send anyway", not a hard block, since two matched people may legitimately choose to
+  exchange real contact info) — otherwise nothing stopped someone from typing a phone
+  number or handle straight into an otherwise-anonymous conversation.
 - Regular posts/comments reject any link/URL at submission time
   (`lib/moderation.ts` `detectLink`) — links, posters, and images can only reach the
   feed via `post_requests`, which requires admin approval (`routes/admin.ts`
