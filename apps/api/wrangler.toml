@@ -27,6 +27,11 @@ new_sqlite_classes = ["ChatRoom"]
 [vars]
 COLLEGE_NAME = "Example College of Engineering"
 COLLEGE_EMAIL_DOMAINS = "cse.college.edu,ece.college.edu,college.edu"
+# Exact origins allowed to make credentialed (cookie-carrying) cross-origin requests.
+# The Vite dev server proxies /api server-side, so the browser normally never makes a
+# cross-origin request at all — this only matters if the frontend is ever opened on a
+# different origin/port, or in production. Update for your deployed frontend origin.
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 OTP_TTL_MINUTES = "10"
 SESSION_TTL_DAYS = "30"
 AI_PROVIDER = "none"

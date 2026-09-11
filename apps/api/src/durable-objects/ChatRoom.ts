@@ -1,4 +1,5 @@
 import { randomId } from "../lib/crypto.js";
+import { checkAndRecordRateLimit } from "../lib/rate-limit.js";
 import type { Env } from "../types.js";
 
 const MAX_MESSAGE_LENGTH = 1000;
@@ -66,15 +67,40 @@ export class ChatRoom {
 
   private async handleMessage(conversationId: string, sender: Socket, data: string | ArrayBuffer): Promise<void> {
     if (typeof data !== "string") return;
-    let parsed: { message?: string };
+    let parsed: unknown;
     try {
       parsed = JSON.parse(data);
     } catch {
       return;
     }
 
-    const message = parsed.message?.trim();
+    const rawMessage =
+      parsed && typeof parsed === "object" && "message" in parsed
+        ? (parsed as { message: unknown }).message
+        : undefined;
+    if (typeof rawMessage !== "string") return;
+
+    const message = rawMessage.trim();
     if (!message || message.length === 0 || message.length > MAX_MESSAGE_LENGTH) return;
+
+    // Per-user messages/minute limit (spec §8) — enforced here since this is the only
+    // path a chat message can take; a client over the limit gets a rejection frame
+    // instead of a silently-dropped message.
+    const rateLimit = await checkAndRecordRateLimit(this.env, sender.userId, "message");
+    if (!rateLimit.allowed) {
+      try {
+        sender.ws.send(
+          JSON.stringify({
+            type: "error",
+            code: "RATE_LIMITED",
+            message: `You've reached the limit of ${rateLimit.limit} messages per minute.`,
+          }),
+        );
+      } catch {
+        // socket already gone
+      }
+      return;
+    }
 
     const id = randomId();
     const createdAt = new Date().toISOString();

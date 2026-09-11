@@ -16,6 +16,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -41,6 +42,7 @@ export default function Chat() {
       ws.addEventListener("message", (event) => {
         const data = JSON.parse(event.data);
         if (data.type === "message") {
+          setError(null);
           setMessages((prev) => [
             ...prev,
             {
@@ -50,6 +52,8 @@ export default function Chat() {
               isMine: data.senderProfileId === profile.id,
             },
           ]);
+        } else if (data.type === "error") {
+          setError(data.message ?? "Something went wrong.");
         }
       });
     })();
@@ -99,6 +103,7 @@ export default function Chat() {
       </main>
 
       <div className="max-w-2xl mx-auto w-full px-6 pb-6">
+        {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
         <div className="flex gap-4 mb-2">
           <AiSuggestButton
             label="Conversation starter"

@@ -225,6 +225,14 @@ postRoutes.post("/:id/react", async (c) => {
     .first();
   if (!post) return fail(c, "POST_NOT_FOUND", "Post not found.", 404);
 
+  // Reactions are the same class of lightweight, spammable engagement action as
+  // likes (and feed directly into the trending score), so they share that bucket —
+  // there's no separate "react" rate-limit action/env var.
+  const rateLimit = await checkAndRecordRateLimit(c.env, user.id, "like");
+  if (!rateLimit.allowed) {
+    return fail(c, "RATE_LIMITED", `You've reached the limit of ${rateLimit.limit} reactions per minute.`, 429);
+  }
+
   const existing = await c.env.DB.prepare(`SELECT reaction_type as reactionType FROM post_reactions WHERE post_id = ?1 AND user_id = ?2`)
     .bind(postId, user.id)
     .first<{ reactionType: string }>();

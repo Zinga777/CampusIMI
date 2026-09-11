@@ -58,10 +58,19 @@ export async function requireAuth(c: AppContext, next: Next) {
   await next();
 }
 
-/** Requires an authenticated user who has completed anonymous profile onboarding. */
+/** Requires an authenticated, active user who has completed anonymous profile
+ * onboarding. This is the sole auth gate on most feature routes (posts, comments,
+ * confessions, matches, events, AI, ...), so it re-checks account status itself
+ * rather than assuming callers also apply requireAuth. */
 export async function requireProfile(c: AppContext, next: Next) {
   const user = c.get("user");
   if (!user) return fail(c, "UNAUTHENTICATED", "Please sign in.", 401);
+  if (user.accountStatus === "suspended") {
+    return fail(c, "ACCOUNT_SUSPENDED", "Your account has been suspended.", 403);
+  }
+  if (user.accountStatus !== "active") {
+    return fail(c, "ACCOUNT_NOT_ACTIVE", "Please complete verification first.", 403);
+  }
   if (!user.hasProfile) {
     return fail(c, "PROFILE_REQUIRED", "Please finish setting up your anonymous profile.", 403);
   }

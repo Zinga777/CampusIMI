@@ -26,7 +26,16 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use(
   "*",
   cors({
-    origin: (origin) => origin ?? "*",
+    // Reflecting an arbitrary request origin while allowing credentials would let
+    // any website make cookie-authenticated requests to this API on a victim's
+    // behalf. Only ever echo back an origin that's on the configured allowlist.
+    origin: (origin, c) => {
+      const allowed = ((c.env.ALLOWED_ORIGINS as string | undefined) ?? "")
+        .split(",")
+        .map((o: string) => o.trim())
+        .filter(Boolean);
+      return allowed.includes(origin) ? origin : null;
+    },
     credentials: true,
   }),
 );

@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { deleteCookie, setCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { parseCollegeDomains, isAllowedCollegeEmail } from "@campusimi/shared";
 import { generateOtp, hashPassword, randomId, randomToken, sha256Hex, verifyPassword } from "../lib/crypto.js";
 import { fail, ok } from "../lib/response.js";
@@ -33,9 +33,13 @@ async function issueSession(c: AppContext, userId: string): Promise<void> {
     .bind(tokenHash, userId, expiresAt.toISOString(), c.req.header("user-agent") ?? null)
     .run();
 
+  // `Secure` cookies are refused by browsers over plain HTTP. Local dev runs the
+  // Worker on http://127.0.0.1, so only require Secure when actually served over
+  // HTTPS (production) — otherwise sessions would silently fail to persist locally.
+  const isHttps = new URL(c.req.url).protocol === "https:";
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: true,
+    secure: isHttps,
     sameSite: "Lax",
     path: "/",
     maxAge: Math.floor(sessionTtlMs(c.env) / 1000),
@@ -212,23 +216,26 @@ authRoutes.post("/login", async (c) => {
     return fail(c, "INVALID_CREDENTIALS", "Invalid email or password.", 401);
   }
 
+  // Never issue a session cookie before the account is fully active — a valid
+  // password alone must not grant access while email verification (or, for
+  // pending_manual_review, admin approval) is still outstanding.
+  if (user.accountStatus !== "active") {
+    return ok(c, { message: "Please verify your email to continue.", accountStatus: user.accountStatus });
+  }
+
   await c.env.DB.prepare(`UPDATE users SET last_active_at = ?1 WHERE id = ?2`)
     .bind(new Date().toISOString(), user.id)
     .run();
 
   await issueSession(c, user.id);
 
-  if (user.accountStatus !== "active") {
-    return ok(c, { message: "Please verify your email to continue.", accountStatus: user.accountStatus });
-  }
-
   return ok(c, { message: "Logged in." });
 });
 
 authRoutes.post("/logout", async (c) => {
-  const token = c.req.header("cookie")?.match(/cimi_session=([^;]+)/)?.[1];
+  const token = getCookie(c, SESSION_COOKIE);
   if (token) {
-    const tokenHash = await sha256Hex(decodeURIComponent(token));
+    const tokenHash = await sha256Hex(token);
     await c.env.DB.prepare(`DELETE FROM sessions WHERE id = ?1`).bind(tokenHash).run();
   }
   deleteCookie(c, SESSION_COOKIE, { path: "/" });

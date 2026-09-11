@@ -17,10 +17,14 @@ const PHONE_RE = /(?:\+?\d[\d\-.\s]{6,}\d)/;
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 // Common address hints: a number followed by a street-ish word.
 const ADDRESS_RE = /\b\d{1,5}\s+([A-Za-z]+\s){0,3}(street|st\.?|avenue|ave\.?|road|rd\.?|lane|ln\.?|block|hostel|apartment|apt\.?)\b/i;
-// Student ID-ish patterns: "id" or "roll" followed by digits.
-const STUDENT_ID_RE = /\b(roll\s*no\.?|student\s*id|reg\.?\s*no\.?)\s*[:-]?\s*\w{4,}/i;
-// Password-ish sharing.
-const PASSWORD_RE = /\b(password|passcode|otp)\s*[:-]?\s*\S{4,}/i;
+// Student ID-ish patterns: "roll no"/"student id"/"reg no" *actually followed by a
+// value* (an explicit separator), not just mentioned in conversation — e.g. "student
+// id: 12345678" blocks, but "what's the student id format?" does not.
+const STUDENT_ID_RE = /\b(roll\s*no\.?|student\s*id|reg\.?\s*no\.?)\s*[:=]\s*\w{4,}/i;
+// Password-ish sharing — same reasoning: require an explicit "key: value" or
+// "key=value" separator so "I forgot my password today" doesn't get blocked, while
+// "password: hunter2" or "otp=583920" still does.
+const PASSWORD_RE = /\b(password|passcode|otp)\s*[:=]\s*\S{3,}/i;
 
 function digitCount(s: string): number {
   return (s.match(/\d/g) ?? []).length;

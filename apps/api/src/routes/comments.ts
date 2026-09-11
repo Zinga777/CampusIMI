@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { fail, ok } from "../lib/response.js";
 import { randomId } from "../lib/crypto.js";
+import { checkAndRecordRateLimit } from "../lib/rate-limit.js";
 import { requireProfile } from "../middleware/auth.js";
 import type { Env, Variables } from "../types.js";
 
@@ -21,6 +22,11 @@ commentRoutes.post("/:id/like", async (c) => {
     .bind(commentId, user.id)
     .first();
   if (already) return ok(c, { liked: true });
+
+  const rateLimit = await checkAndRecordRateLimit(c.env, user.id, "like");
+  if (!rateLimit.allowed) {
+    return fail(c, "RATE_LIMITED", `You've reached the limit of ${rateLimit.limit} likes per minute.`, 429);
+  }
 
   await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO comment_likes (id, comment_id, user_id) VALUES (?1, ?2, ?3)`).bind(

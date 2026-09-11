@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { fail, ok } from "../lib/response.js";
 import { randomId } from "../lib/crypto.js";
+import { matchesImageSignature } from "../lib/file-signature.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { Env, Variables } from "../types.js";
 
@@ -22,6 +23,9 @@ mediaRoutes.get("/:key{.+}", async (c) => {
     headers: {
       "Content-Type": object.httpMetadata?.contentType ?? "application/octet-stream",
       "Cache-Control": "public, max-age=31536000, immutable",
+      // Never let a browser re-sniff and reinterpret user-uploaded content as
+      // something else (e.g. HTML/script) regardless of the declared Content-Type.
+      "X-Content-Type-Options": "nosniff",
     },
   });
 });
@@ -39,6 +43,15 @@ mediaRoutes.post("/avatar", requireAuth, async (c) => {
   if (bytes.byteLength > MAX_AVATAR_BYTES) {
     return fail(c, "FILE_TOO_LARGE", "Avatars must be 2MB or smaller.");
   }
+  // Never trust the client-supplied Content-Type alone — verify the bytes actually
+  // are the image format claimed before storing and later serving them back.
+  if (!matchesImageSignature(bytes, contentType)) {
+    return fail(c, "INVALID_FILE_TYPE", "File content doesn't match a PNG, JPEG, or WebP image.");
+  }
+
+  const previous = await c.env.DB.prepare(`SELECT avatar_url as avatarUrl FROM anonymous_profiles WHERE user_id = ?1`)
+    .bind(user.id)
+    .first<{ avatarUrl: string | null }>();
 
   const key = `avatars/${user.id}/${randomId()}.${ext}`;
   await c.env.MEDIA.put(key, bytes, { httpMetadata: { contentType } });
@@ -47,6 +60,12 @@ mediaRoutes.post("/avatar", requireAuth, async (c) => {
   await c.env.DB.prepare(`UPDATE anonymous_profiles SET avatar_url = ?1, updated_at = ?2 WHERE user_id = ?3`)
     .bind(avatarUrl, new Date().toISOString(), user.id)
     .run();
+
+  // Clean up the old avatar object now that the profile no longer references it.
+  const previousKey = previous?.avatarUrl?.replace(/^\/api\/v1\/media\//, "");
+  if (previousKey && previousKey.startsWith(`avatars/${user.id}/`)) {
+    await c.env.MEDIA.delete(previousKey).catch(() => {});
+  }
 
   return ok(c, { avatarUrl });
 });

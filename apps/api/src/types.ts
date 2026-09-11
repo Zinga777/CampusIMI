@@ -5,6 +5,7 @@ export interface Env {
 
   COLLEGE_NAME: string;
   COLLEGE_EMAIL_DOMAINS: string;
+  ALLOWED_ORIGINS: string;
   SESSION_SECRET: string;
   OTP_TTL_MINUTES: string;
   SESSION_TTL_DAYS: string;
