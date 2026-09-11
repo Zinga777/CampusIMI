@@ -57,6 +57,9 @@ export default function Feed() {
         <div className="font-bold text-xl text-campus-800">CampusIMI</div>
         {profile && (
           <div className="flex items-center gap-3">
+            <Link to="/events" className="text-sm text-campus-600 hover:text-campus-800">
+              Events
+            </Link>
             <Link to="/matches" className="text-sm text-campus-600 hover:text-campus-800">
               Connections
             </Link>

@@ -16,6 +16,7 @@ import { notificationRoutes } from "./routes/notifications.js";
 import { matchRoutes } from "./routes/matches.js";
 import { conversationRoutes } from "./routes/conversations.js";
 import { aiRoutes } from "./routes/ai.js";
+import { eventRoutes } from "./routes/events.js";
 import type { Env, Variables } from "./types.js";
 
 export { ChatRoom } from "./durable-objects/ChatRoom.js";
@@ -48,6 +49,7 @@ app.route("/api/v1/notifications", notificationRoutes);
 app.route("/api/v1/matches", matchRoutes);
 app.route("/api/v1/conversations", conversationRoutes);
 app.route("/api/v1/ai", aiRoutes);
+app.route("/api/v1/events", eventRoutes);
 
 app.notFound((c) => fail(c, "NOT_FOUND", "Not found.", 404));
 

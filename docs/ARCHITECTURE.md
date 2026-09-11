@@ -358,3 +358,11 @@ For now:
   at the configured threshold) and the rewrite-suggestion picker was exercised in a
   real headless-browser session (including seeing the rate-limit error surface
   gracefully once the quota from an earlier test run was already exhausted).
+- **Phase 8 (Campus events):** done. `events` (anonymous creator, like posts —
+  `anonymous_profile_id` alongside `created_by_user_id`) and `event_participants`.
+  Create/list (upcoming-first by default)/detail/interested-toggle, sensitive-info
+  detection on title/description/location, participant counts and the viewer's own
+  interested state computed in SQL. Frontend: an Events page with inline creation and
+  an "I'm interested" toggle, linked from the feed header. Verified end-to-end against
+  `wrangler dev --local` (create → list → mark/unmark interested, counts and viewer
+  state updating correctly) and exercised in a real headless-browser session.
