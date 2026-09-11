@@ -16,13 +16,9 @@ migrations_dir = "../../migrations"
 binding = "MEDIA"
 bucket_name = "campusimi-media"
 
-[[durable_objects.bindings]]
-name = "CHAT_ROOMS"
-class_name = "ChatRoom"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["ChatRoom"]
+# No Durable Objects: chat is REST + polling (see apps/api/src/routes/conversations.ts)
+# specifically so this Worker never requires the Cloudflare Workers Paid plan — the
+# rest of the stack (Workers, D1, R2) all fit comfortably on the free tier.
 
 [vars]
 COLLEGE_NAME = "Example College of Engineering"

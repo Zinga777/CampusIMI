@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { PublicAnonymousProfile } from "@campusimi/shared";
-import { api } from "../lib/api.js";
+import { api, ApiError } from "../lib/api.js";
 import AiSuggestButton from "../components/AiSuggestButton.js";
 
 interface Message {
@@ -11,67 +10,74 @@ interface Message {
   isMine: boolean;
 }
 
+// Chat runs on plain REST + polling rather than a live WebSocket connection —
+// no Cloudflare Durable Object is needed, which keeps the whole app on
+// Cloudflare's free tier. Messages typically show up within this interval.
+const POLL_INTERVAL_MS = 3000;
+
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
-  const [connected, setConnected] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const lastCreatedAtRef = useRef<string | null>(null);
+
+  const poll = useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const params = new URLSearchParams();
+      if (lastCreatedAtRef.current) params.set("after", lastCreatedAtRef.current);
+      const res = await api.get<{ messages: Message[] }>(`/conversations/${conversationId}/messages?${params}`);
+      if (res.messages.length > 0) {
+        lastCreatedAtRef.current = res.messages[res.messages.length - 1]!.createdAt;
+        setMessages((prev) => [...prev, ...res.messages]);
+      }
+    } catch {
+      // transient poll failure — silently retry on the next tick
+    }
+  }, [conversationId]);
 
   useEffect(() => {
     if (!conversationId) return;
     let cancelled = false;
-    let ws: WebSocket | null = null;
 
     (async () => {
-      const profile = await api.get<PublicAnonymousProfile>("/profile/me");
-      if (cancelled) return;
-
       const history = await api.get<{ messages: Message[] }>(`/conversations/${conversationId}/messages`);
       if (cancelled) return;
       setMessages(history.messages);
-
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      ws = new WebSocket(`${proto}//${window.location.host}/api/v1/conversations/${conversationId}/ws`);
-      wsRef.current = ws;
-
-      ws.addEventListener("open", () => setConnected(true));
-      ws.addEventListener("close", () => setConnected(false));
-      ws.addEventListener("message", (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === "message") {
-          setError(null);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: data.id,
-              message: data.message,
-              createdAt: data.createdAt,
-              isMine: data.senderProfileId === profile.id,
-            },
-          ]);
-        } else if (data.type === "error") {
-          setError(data.message ?? "Something went wrong.");
-        }
-      });
+      lastCreatedAtRef.current = history.messages.at(-1)?.createdAt ?? null;
+      setLoaded(true);
     })();
 
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
-      ws?.close();
+      clearInterval(interval);
     };
-  }, [conversationId]);
+  }, [conversationId, poll]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  function send() {
-    if (!draft.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ message: draft }));
-    setDraft("");
+  async function send() {
+    const text = draft.trim();
+    if (!text || !conversationId || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const sent = await api.post<Message>(`/conversations/${conversationId}/messages`, { message: text });
+      setMessages((prev) => [...prev, sent]);
+      lastCreatedAtRef.current = sent.createdAt;
+      setDraft("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -80,9 +86,7 @@ export default function Chat() {
         <Link to="/matches" className="text-sm text-campus-600 hover:text-campus-800">
           ← Connections
         </Link>
-        <span className={`text-xs ${connected ? "text-green-600" : "text-campus-400"}`}>
-          {connected ? "Connected" : "Connecting…"}
-        </span>
+        <span className="text-xs text-campus-400">{loaded ? "Auto-refreshing" : "Loading…"}</span>
       </header>
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 flex flex-col">
@@ -128,7 +132,8 @@ export default function Chat() {
           />
           <button
             onClick={send}
-            className="px-5 rounded-full bg-campus-700 text-white font-medium hover:bg-campus-800"
+            disabled={sending}
+            className="px-5 rounded-full bg-campus-700 text-white font-medium hover:bg-campus-800 disabled:opacity-50"
           >
             Send
           </button>

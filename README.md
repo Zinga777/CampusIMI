@@ -14,7 +14,10 @@ rationale, database schema, and the security/anonymity threat model.
 
 > **Status:** fully functional for local development. Every feature phase below is
 > built and tested against `wrangler dev --local` + Vite. Production deployment to
-> Cloudflare has **not** been done — see "What's pending" below.
+> Cloudflare has **not** been done — see "What's pending" below. The whole stack is
+> designed to run entirely on Cloudflare's **free tier** at ~500 users (chat uses REST
+> + polling instead of Durable Objects specifically to avoid the paid plan — see
+> `docs/ARCHITECTURE.md` §11).
 
 ## What's done vs. pending
 
@@ -25,7 +28,7 @@ rationale, database schema, and the security/anonymity threat model.
 | Campus feed (posts, likes, reactions, comments, trending/latest/discussed/popular) | ✅ Done |
 | Moderation & safety (reports, blocks, rate limits, admin API, audit log) | ✅ Done |
 | Confessions + mutual-interest detection + notifications | ✅ Done |
-| Matching & anonymous real-time chat (Cloudflare Durable Objects) | ✅ Done |
+| Matching & anonymous chat (REST + polling, free-tier friendly) | ✅ Done |
 | AI features (bio/post/conversation-starter suggestions) | ✅ Done — falls back to template suggestions with no `AI_API_KEY` configured; the same code path calls a real LLM once one is provided |
 | Campus events (create, RSVP/"interested") | ✅ Done |
 | Admin dashboard (stats, reports, posts, users, audit log) | ✅ Done |
@@ -42,7 +45,7 @@ rationale, database schema, and the security/anonymity threat model.
 - **Backend:** Cloudflare Workers + [Hono](https://hono.dev) (routing/middleware).
 - **Database:** Cloudflare D1 (SQLite), plain parameterized SQL (no ORM).
 - **File storage:** Cloudflare R2 (avatar uploads, magic-byte validated).
-- **Realtime:** Cloudflare Durable Objects + WebSockets (anonymous chat).
+- **Chat:** REST + client-side polling (~3s), no Durable Objects — keeps the whole app on Cloudflare's free tier.
 - **Auth:** Session cookies (HttpOnly, SameSite=Lax, `Secure` only over HTTPS), PBKDF2 password hashing via Web Crypto.
 - **Testing:** Vitest.
 - **Monorepo:** npm workspaces (no Turborepo/Nx — kept deliberately simple).
@@ -61,9 +64,8 @@ apps/
       routes/         One file per resource (posts, auth, admin, matches, ...)
       middleware/      Session auth + admin-authorization guards
       lib/             Crypto, rate limiting, moderation filters, trending algorithm
-      durable-objects/ ChatRoom (realtime chat)
       *.test.ts        Vitest unit tests, colocated with the code they test
-    wrangler.toml       Worker config: D1/R2/Durable Object bindings, non-secret vars
+    wrangler.toml       Worker config: D1/R2 bindings, non-secret vars (no Durable Objects — free-tier friendly)
     .dev.vars.example   Template for local secrets (copy to .dev.vars, gitignored)
 packages/
   shared/             TypeScript types & config shared by both apps (enums, API shapes)
@@ -99,8 +101,8 @@ npm run dev
 Then open **http://localhost:5173** in your browser.
 
 - Frontend: http://localhost:5173
-- API: http://localhost:8787 (the frontend proxies `/api/*` — including the chat
-  WebSocket — to this automatically; you don't need to open it directly)
+- API: http://localhost:8787 (the frontend proxies `/api/*` to this automatically;
+  you don't need to open it directly)
 
 To stop: `Ctrl+C` once (it stops both processes).
 
@@ -182,8 +184,8 @@ All four currently pass clean. Run them after any change before considering it d
   cookie-authenticated requests to the API on a logged-in user's behalf.
 - Every protected endpoint resolves the acting user from the session — never from a
   client-supplied id — to prevent IDOR. This is especially load-bearing in
-  `apps/api/src/routes/conversations.ts` (`assertParticipant`), which the WebSocket
-  chat route depends on before ever forwarding a connection to the Durable Object.
+  `apps/api/src/routes/conversations.ts` (`assertParticipant`), which both the message
+  send and poll endpoints re-check on every single call.
 - The real `user_id` is never serialized to a normal client anywhere — only an
   `anonymous_profile_id` is. Admin-only endpoints are the sole exception (by design,
   for moderation), and every admin action is written to `audit_logs`.
@@ -199,7 +201,7 @@ All four currently pass clean. Run them after any change before considering it d
 ## Deploying (not done yet)
 
 This repo has only ever run against Cloudflare's local emulation
-(`wrangler dev --local`, local D1/R2/Durable Objects) — no `wrangler deploy` has been
+(`wrangler dev --local`, local D1/R2 emulation) — no `wrangler deploy` has been
 run, and `wrangler.toml` has no `account_id` or production routes configured. To take
 this to production you'd need to: create the real D1 database and R2 bucket in a
 Cloudflare account, update `wrangler.toml` with the real `database_id`/`account_id`,

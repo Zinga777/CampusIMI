@@ -19,8 +19,6 @@ import { aiRoutes } from "./routes/ai.js";
 import { eventRoutes } from "./routes/events.js";
 import type { Env, Variables } from "./types.js";
 
-export { ChatRoom } from "./durable-objects/ChatRoom.js";
-
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use(

@@ -1,11 +1,15 @@
 import { Hono } from "hono";
 import { fail, ok } from "../lib/response.js";
+import { randomId } from "../lib/crypto.js";
+import { checkAndRecordRateLimit } from "../lib/rate-limit.js";
 import { requireProfile } from "../middleware/auth.js";
 import type { Env, Variables } from "../types.js";
 
 export const conversationRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 conversationRoutes.use("*", requireProfile);
+
+const MAX_MESSAGE_LENGTH = 1000;
 
 /** The one IDOR check every route below depends on: does this conversation exist, is
  * its match active, and is the current session's user actually one of its two
@@ -26,41 +30,54 @@ conversationRoutes.get("/:id/messages", async (c) => {
   const conversationId = c.req.param("id");
   const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
   const before = c.req.query("before");
+  const after = c.req.query("after");
 
   if (!(await assertParticipant(c.env, conversationId, user.id))) {
     return fail(c, "FORBIDDEN", "You don't have access to this conversation.", 403);
   }
 
-  const query = before
-    ? `SELECT id, sender_user_id as senderUserId, message, created_at as createdAt, read_at as readAt
-       FROM messages WHERE conversation_id = ?1 AND deleted_at IS NULL AND created_at < ?2
-       ORDER BY created_at DESC LIMIT ?3`
-    : `SELECT id, sender_user_id as senderUserId, message, created_at as createdAt, read_at as readAt
-       FROM messages WHERE conversation_id = ?1 AND deleted_at IS NULL
-       ORDER BY created_at DESC LIMIT ?2`;
-  const stmt = before
-    ? c.env.DB.prepare(query).bind(conversationId, before, limit)
-    : c.env.DB.prepare(query).bind(conversationId, limit);
+  // `after` powers polling for new messages since the last one the client has seen
+  // (ascending order, so new messages append in place); `before` powers loading
+  // older history (descending, then reversed); with neither, the most recent page.
+  let query: string;
+  let bindings: unknown[];
+  if (after) {
+    query = `SELECT id, sender_user_id as senderUserId, message, created_at as createdAt, read_at as readAt
+             FROM messages WHERE conversation_id = ?1 AND deleted_at IS NULL AND created_at > ?2
+             ORDER BY created_at ASC LIMIT ?3`;
+    bindings = [conversationId, after, limit];
+  } else if (before) {
+    query = `SELECT id, sender_user_id as senderUserId, message, created_at as createdAt, read_at as readAt
+             FROM messages WHERE conversation_id = ?1 AND deleted_at IS NULL AND created_at < ?2
+             ORDER BY created_at DESC LIMIT ?3`;
+    bindings = [conversationId, before, limit];
+  } else {
+    query = `SELECT id, sender_user_id as senderUserId, message, created_at as createdAt, read_at as readAt
+             FROM messages WHERE conversation_id = ?1 AND deleted_at IS NULL
+             ORDER BY created_at DESC LIMIT ?2`;
+    bindings = [conversationId, limit];
+  }
 
-  const { results } = await stmt.all<{
-    id: string;
-    senderUserId: string;
-    message: string;
-    createdAt: string;
-    readAt: string | null;
-  }>();
+  const { results } = await c.env.DB.prepare(query)
+    .bind(...bindings)
+    .all<{
+      id: string;
+      senderUserId: string;
+      message: string;
+      createdAt: string;
+      readAt: string | null;
+    }>();
 
   // Only the viewer's own messages ever reveal their own senderUserId back to
   // themselves as "isMine" — the other party's real user id is never serialized.
-  const messages = results
-    .map((m) => ({
-      id: m.id,
-      message: m.message,
-      createdAt: m.createdAt,
-      isMine: m.senderUserId === user.id,
-      readAt: m.readAt,
-    }))
-    .reverse();
+  const ordered = after ? results : results.reverse();
+  const messages = ordered.map((m) => ({
+    id: m.id,
+    message: m.message,
+    createdAt: m.createdAt,
+    isMine: m.senderUserId === user.id,
+    readAt: m.readAt,
+  }));
 
   await c.env.DB.prepare(
     `UPDATE messages SET read_at = ?1 WHERE conversation_id = ?2 AND sender_user_id != ?3 AND read_at IS NULL`,
@@ -71,26 +88,33 @@ conversationRoutes.get("/:id/messages", async (c) => {
   return ok(c, { messages });
 });
 
-conversationRoutes.get("/:id/ws", async (c) => {
+conversationRoutes.post("/:id/messages", async (c) => {
   const user = c.get("user")!;
   const conversationId = c.req.param("id");
 
   if (!(await assertParticipant(c.env, conversationId, user.id))) {
     return fail(c, "FORBIDDEN", "You don't have access to this conversation.", 403);
   }
-  if (c.req.header("Upgrade") !== "websocket") {
-    return fail(c, "UPGRADE_REQUIRED", "This endpoint only accepts WebSocket connections.", 426);
+
+  const body = (await c.req.json().catch(() => null)) as { message?: string } | null;
+  const message = body?.message?.trim();
+  if (!message) return fail(c, "EMPTY_MESSAGE", "Message can't be empty.");
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return fail(c, "MESSAGE_TOO_LONG", `Messages must be ${MAX_MESSAGE_LENGTH} characters or fewer.`);
   }
 
-  const doId = c.env.CHAT_ROOMS.idFromName(conversationId);
-  const stub = c.env.CHAT_ROOMS.get(doId);
+  const rateLimit = await checkAndRecordRateLimit(c.env, user.id, "message");
+  if (!rateLimit.allowed) {
+    return fail(c, "RATE_LIMITED", `You've reached the limit of ${rateLimit.limit} messages per minute.`, 429);
+  }
 
-  const forwardUrl = new URL(c.req.url);
-  forwardUrl.searchParams.set("conversationId", conversationId);
+  const id = randomId();
+  const createdAt = new Date().toISOString();
+  await c.env.DB.prepare(
+    `INSERT INTO messages (id, conversation_id, sender_user_id, message, created_at) VALUES (?1, ?2, ?3, ?4, ?5)`,
+  )
+    .bind(id, conversationId, user.id, message, createdAt)
+    .run();
 
-  const forwardRequest = new Request(forwardUrl.toString(), c.req.raw);
-  forwardRequest.headers.set("X-User-Id", user.id);
-  forwardRequest.headers.set("X-Profile-Id", user.anonymousProfileId!);
-
-  return stub.fetch(forwardRequest);
+  return ok(c, { id, message, createdAt, isMine: true }, 201);
 });

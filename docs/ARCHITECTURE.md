@@ -15,10 +15,11 @@ implementation proceeds phase by phase.
                          │   - Rate limiting              │
                          └──────────────┬────────────────┘
                                         │
-                ┌───────────────────────┼───────────────────────┐
-                ▼                       ▼                       ▼
-        Cloudflare D1            Cloudflare R2           Durable Objects
-        (relational data)     (avatars / post images)     (chat rooms, WS)
+                        ┌───────────────┴───────────────┐
+                        ▼                               ▼
+                Cloudflare D1                    Cloudflare R2
+                (relational data,           (avatars / post images)
+                 chat messages included)
 ```
 
 - Single Worker (`apps/api`) serves the whole REST API using the Hono router.
@@ -26,10 +27,11 @@ implementation proceeds phase by phase.
   dev (Vite dev server) and, in production, as Worker static assets / Pages.
 - `packages/shared` holds TypeScript types/constants shared by both apps (API contracts,
   config enums, validation helpers) so the frontend and backend never drift.
-- D1 is the single source of truth. Durable Objects are used only for realtime chat
-  fan-out (Phase 6); all chat messages are still persisted to D1.
-- No Kubernetes/microservices/Redis/Kafka — a single Worker + D1 + R2 + DO is sufficient
-  for ~500 users.
+- D1 is the single source of truth for everything, chat messages included.
+- No Kubernetes/microservices/Redis/Kafka — a single Worker + D1 + R2 is sufficient for
+  ~500 users, **and deliberately avoids Cloudflare Durable Objects** so the whole stack
+  fits on Cloudflare's free tier (Durable Objects require the paid Workers plan). Chat
+  is REST + short-interval polling instead of a live WebSocket — see §11 (Cost & hosting).
 
 ## 2. Technology Choices
 
@@ -42,7 +44,7 @@ implementation proceeds phase by phase.
 | Icons | lucide-react | Matches spec |
 | Auth | Session cookies (HttpOnly, Secure, SameSite=Lax) backed by a `sessions` table | Simple, revocable, no JWT statelessness needed at this scale |
 | Password hashing | PBKDF2-SHA256 via Web Crypto (`crypto.subtle`), available natively in Workers | No native bcrypt in Workers runtime; PBKDF2 with high iteration count is an accepted standard |
-| Realtime chat | Durable Objects + WebSocket | Required by spec |
+| Realtime chat | REST endpoints + client-side polling (~3s interval), messages persisted in D1 | Delivers the same anonymous chat experience without Durable Objects, which require the paid Workers plan — keeps the whole stack on Cloudflare's free tier at ~500 users |
 | File storage | Cloudflare R2 | Required by spec |
 | AI | Pluggable `AI_API_KEY` provider behind a thin server-side abstraction | Never called with PII; advisory only |
 | Monorepo tooling | npm workspaces | Simplest option, no Turborepo needed per spec |
@@ -122,7 +124,8 @@ checks). `*_user_id` columns are **never** serialized in any public API response
   - `GET/POST /api/v1/posts/:id/comments`, `POST /api/v1/comments/:id/like`
   - `POST /api/v1/reports`, `POST /api/v1/blocks`
   - `POST /api/v1/confessions`, `POST /api/v1/confessions/:id/respond`
-  - `GET /api/v1/matches`, `GET /api/v1/conversations/:id/messages` (+ DO WebSocket upgrade)
+  - `GET /api/v1/matches`, `GET/POST /api/v1/conversations/:id/messages` (client polls the
+    GET endpoint with an `after` cursor for new messages — no WebSocket/Durable Object)
   - `/api/v1/admin/*` (admin-only, separate authorization middleware)
 - Config-driven values (categories, academic-status labels, gender options, rate limits)
   live in `packages/shared/src/config.ts`, overridable via environment/config, never
@@ -245,6 +248,35 @@ For now:
   deploy`, and Pages/Workers static asset hosting for `apps/web`'s build output — not done
   in this task.
 
+### Cost & hosting: designed to run on Cloudflare's free tier
+
+At ~500 students, this app's Cloudflare footprint is deliberately kept inside every
+service's free tier:
+
+| Service | Free tier headroom at ~500 users | Fits free tier? |
+|---|---|---|
+| Workers (API) | Free plan covers 100,000 requests/day | ✅ |
+| D1 (database) | Free tier's storage/row-read/row-write limits are generous for a text-based feed at this scale | ✅ |
+| R2 (avatars) | Free tier covers ~10GB storage; R2 also has zero egress fees beyond the free tier | ✅ |
+| Durable Objects | **Not used at all** — see below | N/A |
+
+Durable Objects are the one Cloudflare primitive that requires the paid Workers plan
+(~$5/month) regardless of usage — there is no free tier for them. Since chat was the
+only feature that would have needed them, chat is implemented as plain REST endpoints
+(`POST /conversations/:id/messages`, `GET /conversations/:id/messages`) with the client
+polling every ~3 seconds for new messages (`GET .../messages?after=<lastCreatedAt>`)
+instead of holding open a live WebSocket. Messages are still persisted in D1 exactly as
+before; the only user-facing difference is that a new message can take up to ~3 seconds
+to appear instead of arriving instantly. This was a deliberate trade-off to keep 100%
+of the stack on free-tier Cloudflare — see the chat routes in
+`apps/api/src/routes/conversations.ts` for the implementation.
+
+Not covered by Cloudflare's free tier: a real domain name (a few dollars/year, unless
+using a free `*.pages.dev`-style subdomain) and a transactional email provider for OTP
+delivery (most providers' free tiers — e.g. Resend — comfortably cover occasional
+signup/verification volume at this scale, though a signup rush on the same day could
+brush against some providers' daily send caps).
+
 ## 12. Potential Security/Privacy Risks (tracked, mitigated per phase)
 
 1. **De-anonymization via timing/correlation** — mitigated by not exposing per-post
@@ -321,23 +353,22 @@ For now:
 - **Phase 6 (Connections & anonymous chat):** done. `POST /matches` creates a match +
   conversation only when the double-opt-in mutual-interest check from Phase 5 still
   holds (re-verified server-side, never trusted from the client), and is idempotent for
-  an already-active pair. Chat runs on a Durable Object per conversation (`ChatRoom`,
-  keyed by `idFromName(conversationId)`): the Worker's `/conversations/:id/ws` route
-  re-verifies the session user is one of the match's two participants (the one IDOR
-  check everything else depends on) *before* forwarding the WebSocket upgrade to the
-  Durable Object, and attaches the caller's real user id and anonymous profile id as
-  trusted headers — trusted precisely because a client can never reach a Durable Object
-  directly, only through this authenticated Worker route. Messages persist to D1
-  (`sender_user_id` keeps backend accountability) but the DO broadcasts only
-  `senderProfileId` to connected clients — the real user id never reaches the wire.
-  `GET /conversations/:id/messages` serves history + marks the other side's messages
-  read. Frontend: a Connections list, a chat screen with live WebSocket send/receive,
-  and a "Connect" button surfaced directly on the `mutual_interest` notification.
-  Verified end-to-end: curl-driven match creation/listing, then a Node WebSocket client
-  proving two independently-authenticated sessions exchange real-time messages while a
-  third, unrelated user is rejected (403) from reading the conversation's history —
-  and the same flow (open connections → open chat → live send/receive across two
-  separate browser contexts) was exercised with a real headless-browser session.
+  an already-active pair. Chat is plain REST + polling — `POST
+  /conversations/:id/messages` to send, `GET /conversations/:id/messages` (with an
+  `after` cursor) to fetch new ones, polled client-side every ~3s — re-verifying on
+  every call that the session user is one of the match's two participants (the one
+  IDOR check everything else depends on). Messages persist to D1 with the real
+  `sender_user_id` (backend accountability), but only `isMine` (derived server-side
+  from the session) is ever serialized to clients — the real user id never reaches the
+  wire. This intentionally avoids Cloudflare Durable Objects (which would require the
+  paid Workers plan) so the whole app stays on Cloudflare's free tier — see
+  `docs/ARCHITECTURE.md` §11 ("Cost & hosting") for the trade-off. Frontend: a
+  Connections list, a chat screen with polling send/receive, and a "Connect" button
+  surfaced directly on the `mutual_interest` notification. Verified end-to-end:
+  curl-driven match creation/listing, sending and polling-with-cursor across two
+  independently-authenticated sessions (confirming cross-user delivery), a third,
+  unrelated user rejected (403) from both reading and sending on the conversation, and
+  the message rate limit tripping at the configured threshold.
 - **Phase 7 (AI features):** done. A thin `lib/ai.ts` abstraction: when `AI_API_KEY`
   isn't configured (the default here — no real credentials are available in this
   environment), every call falls back to a deterministic template generator so the
