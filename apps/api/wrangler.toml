@@ -1,0 +1,36 @@
+name = "campusimi-api"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# No account_id / routes configured — this project is local-development-only
+# for now. Production deployment is deferred (see docs/ARCHITECTURE.md §11).
+
+[[d1_databases]]
+binding = "DB"
+database_name = "campusimi-db"
+database_id = "local-dev-placeholder"
+migrations_dir = "../../migrations"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "campusimi-media"
+
+[vars]
+COLLEGE_NAME = "Example College of Engineering"
+COLLEGE_EMAIL_DOMAINS = "cse.college.edu,ece.college.edu,college.edu"
+OTP_TTL_MINUTES = "10"
+SESSION_TTL_DAYS = "30"
+AI_PROVIDER = "none"
+RATE_LIMIT_POSTS_PER_HOUR = "10"
+RATE_LIMIT_COMMENTS_PER_MINUTE = "5"
+RATE_LIMIT_LIKES_PER_MINUTE = "30"
+RATE_LIMIT_CONFESSIONS_PER_HOUR = "10"
+RATE_LIMIT_MESSAGES_PER_MINUTE = "20"
+RATE_LIMIT_AI_PER_HOUR = "20"
+
+# SESSION_SECRET and AI_API_KEY are secrets — set locally via `.dev.vars`
+# (gitignored), never committed. See `.dev.vars.example`.
+
+[dev]
+port = 8787

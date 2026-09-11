@@ -1,0 +1,29 @@
+{
+  "name": "@campusimi/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --persist-to=.wrangler/state --port 8787",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply campusimi-db --local",
+    "seed:local": "tsx ../../seed/seed.ts"
+  },
+  "dependencies": {
+    "@campusimi/shared": "*",
+    "hono": "^4.6.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "@typescript-eslint/eslint-plugin": "^8.12.2",
+    "@typescript-eslint/parser": "^8.12.2",
+    "eslint": "^8.57.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4",
+    "wrangler": "^3.84.0"
+  }
+}

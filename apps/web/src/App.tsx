@@ -1,0 +1,35 @@
+import { Route, Routes } from "react-router-dom";
+import Landing from "./pages/Landing.js";
+import Register from "./pages/Register.js";
+import VerifyOtp from "./pages/VerifyOtp.js";
+import Login from "./pages/Login.js";
+import Onboarding from "./pages/Onboarding.js";
+import Feed from "./pages/Feed.js";
+import ProtectedRoute from "./components/ProtectedRoute.js";
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/verify" element={<VerifyOtp />} />
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <Onboarding />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/feed"
+        element={
+          <ProtectedRoute>
+            <Feed />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}

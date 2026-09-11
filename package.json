@@ -1,0 +1,28 @@
+{
+  "name": "campusimi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Private anonymous college social network (dev-only, local Cloudflare stack)",
+  "workspaces": [
+    "apps/web",
+    "apps/api",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace apps/api & npm run dev --workspace apps/web & wait",
+    "dev:api": "npm run dev --workspace apps/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspace packages/shared && npm run build --workspace apps/web && npm run build --workspace apps/api",
+    "typecheck": "npm run typecheck --workspace packages/shared && npm run typecheck --workspace apps/api && npm run typecheck --workspace apps/web",
+    "lint": "npm run lint --workspace apps/api && npm run lint --workspace apps/web",
+    "test": "npm run test --workspace apps/api",
+    "db:migrate:local": "npm run db:migrate:local --workspace apps/api",
+    "seed:local": "npm run seed:local --workspace apps/api"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
