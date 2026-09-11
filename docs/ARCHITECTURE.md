@@ -131,6 +131,10 @@ checks). `*_user_id` columns are **never** serialized in any public API response
     mutual right-swipe auto-creates the match + conversation via the same
     `lib/matching.ts` `createMatch` helper the confession mutual-interest flow calls
     through `POST /api/v1/matches`
+  - `GET/POST /api/v1/conversations/:id/reveals` — even after a match, gender,
+    interests, academic status, and course stay hidden; either side opts in per field
+    (`profile_reveals` table) and it only becomes visible to both once both have opted
+    in for that field, mirroring the confession mutual-interest double-opt-in shape
   - `POST /api/v1/post-requests`, `POST /api/v1/post-requests/:id/image`,
     `GET /api/v1/post-requests/mine` — regular posts/comments reject links outright
     (`detectLink`); a link, poster/image, or urgent notice instead goes through this
