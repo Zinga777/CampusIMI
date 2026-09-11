@@ -305,3 +305,16 @@ For now:
   disappear from the blocker's feed, suspend → login rejected → unsuspend → login
   succeeds, rate limit tripping at the configured threshold) and the report dialog was
   exercised in a real headless-browser session.
+- **Phase 5 (Confessions):** done. Send/receive/respond (interested/sweet/not
+  interested), blocked users can't confess to each other, sensitive-info and rate
+  limiting apply to confessions too. Mutual interest is detected as: both users have
+  independently sent a confession to the other and both got an "interested" response —
+  when the second side responds interested, both get a `mutual_interest` notification
+  carrying the other's anonymous profile id (never a real user id). Actually creating
+  the match/conversation from that mutual state is Phase 6. Frontend: a "Send
+  confession" action in the post card's menu, a notification bell with unread badge,
+  and a Confessions page (received — respond inline; sent — see status). Verified
+  end-to-end against `wrangler dev --local` (send → notify → respond → mutual detection
+  firing correctly for both sides, double-response rejected) and the confession-send →
+  notification-bell → confessions-page flow was exercised in a real headless-browser
+  session across two separate logged-in users.

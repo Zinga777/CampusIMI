@@ -7,6 +7,7 @@ import { fallbackAvatarDataUri } from "../lib/avatar.js";
 import type { FeedMode, Post } from "../lib/types.js";
 import PostComposer from "../components/PostComposer.js";
 import PostCard from "../components/PostCard.js";
+import NotificationBell from "../components/NotificationBell.js";
 
 const MODES: { value: FeedMode; label: string; emoji: string }[] = [
   { value: "trending", label: "Trending", emoji: "🔥" },
@@ -55,6 +56,7 @@ export default function Feed() {
         <div className="font-bold text-xl text-campus-800">CampusIMI</div>
         {profile && (
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <img
               src={profile.avatarUrl ?? fallbackAvatarDataUri(profile.displayName)}
               alt=""

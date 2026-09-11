@@ -5,6 +5,7 @@ import VerifyOtp from "./pages/VerifyOtp.js";
 import Login from "./pages/Login.js";
 import Onboarding from "./pages/Onboarding.js";
 import Feed from "./pages/Feed.js";
+import Confessions from "./pages/Confessions.js";
 import ProtectedRoute from "./components/ProtectedRoute.js";
 
 export default function App() {
@@ -27,6 +28,14 @@ export default function App() {
         element={
           <ProtectedRoute requireProfile>
             <Feed />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/confessions"
+        element={
+          <ProtectedRoute requireProfile>
+            <Confessions />
           </ProtectedRoute>
         }
       />

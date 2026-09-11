@@ -5,6 +5,7 @@ import { api, ApiError } from "../lib/api.js";
 import { fallbackAvatarDataUri } from "../lib/avatar.js";
 import { POST_CATEGORY_LABELS } from "@campusimi/shared";
 import ReportDialog from "./ReportDialog.js";
+import ConfessionDialog from "./ConfessionDialog.js";
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -24,6 +25,7 @@ export default function PostCard({ post: initial }: { post: Post }) {
   const [commentWarning, setCommentWarning] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [confessOpen, setConfessOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [blocked, setBlocked] = useState(false);
 
@@ -143,6 +145,15 @@ export default function PostCard({ post: initial }: { post: Post }) {
               >
                 Hide
               </button>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setConfessOpen(true);
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-campus-50 text-campus-700"
+              >
+                Send confession
+              </button>
               <button onClick={blockAuthor} className="w-full text-left px-3 py-2 hover:bg-campus-50 text-red-600">
                 Block {post.author.displayName}
               </button>
@@ -216,6 +227,13 @@ export default function PostCard({ post: initial }: { post: Post }) {
 
       {reportOpen && (
         <ReportDialog contentType="post" contentId={post.id} onClose={() => setReportOpen(false)} />
+      )}
+      {confessOpen && (
+        <ConfessionDialog
+          recipientDisplayName={post.author.displayName}
+          recipientAnonymousProfileId={post.author.anonymousProfileId}
+          onClose={() => setConfessOpen(false)}
+        />
       )}
     </div>
   );
