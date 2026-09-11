@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useConfig } from "../lib/config-context.js";
 import { api, ApiError } from "../lib/api.js";
 import AiSuggestButton from "./AiSuggestButton.js";
@@ -78,6 +79,12 @@ export default function PostComposer({ onPosted }: { onPosted: () => void }) {
           {submitting ? "Posting…" : "Post anonymously"}
         </button>
       </div>
+      <p className="mt-2 text-xs text-campus-500">
+        Plain text only — links aren't allowed here.{" "}
+        <Link to="/request-post" className="text-campus-700 hover:underline">
+          Want to share a link, poster, or something urgent?
+        </Link>
+      </p>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       {warning && (
         <div className="mt-3 rounded-lg bg-accent-400/15 border border-accent-400/30 px-4 py-3 text-sm text-campus-800">

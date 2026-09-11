@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectSensitiveInfo, detectUnverifiedAccusation } from "./moderation.js";
+import { detectLink, detectSensitiveInfo, detectUnverifiedAccusation } from "./moderation.js";
 
 describe("detectSensitiveInfo", () => {
   it("blocks an email address", () => {
@@ -39,6 +39,29 @@ describe("detectSensitiveInfo", () => {
 
   it("does not block short numbers like times or room numbers", () => {
     expect(detectSensitiveInfo("meet at 5pm in room 204").blocked).toBe(false);
+  });
+});
+
+describe("detectLink", () => {
+  it("blocks an explicit https URL", () => {
+    expect(detectLink("check this out https://example.com/event").blocked).toBe(true);
+  });
+
+  it("blocks a www.-prefixed link with no protocol", () => {
+    expect(detectLink("go to www.example.com for details").blocked).toBe(true);
+  });
+
+  it("blocks a bare domain with a common TLD", () => {
+    expect(detectLink("follow us on instagram.com/campusimi").blocked).toBe(true);
+  });
+
+  it("allows ordinary text containing sentence punctuation", () => {
+    expect(detectLink("Great job. Really impressive!").blocked).toBe(false);
+    expect(detectLink("I got a 3.5 GPA this semester").blocked).toBe(false);
+  });
+
+  it("allows ordinary text with no links", () => {
+    expect(detectLink("The canteen food was actually good today").blocked).toBe(false);
   });
 });
 

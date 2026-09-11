@@ -126,7 +126,12 @@ checks). `*_user_id` columns are **never** serialized in any public API response
   - `POST /api/v1/confessions`, `POST /api/v1/confessions/:id/respond`
   - `GET /api/v1/matches`, `GET/POST /api/v1/conversations/:id/messages` (client polls the
     GET endpoint with an `after` cursor for new messages — no WebSocket/Durable Object)
-  - `/api/v1/admin/*` (admin-only, separate authorization middleware)
+  - `POST /api/v1/post-requests`, `POST /api/v1/post-requests/:id/image`,
+    `GET /api/v1/post-requests/mine` — regular posts/comments reject links outright
+    (`detectLink`); a link, poster/image, or urgent notice instead goes through this
+    queue for admin approval (no payment processing)
+  - `/api/v1/admin/*` (admin-only, separate authorization middleware), including
+    `GET /api/v1/admin/post-requests`, `POST .../approve`, `POST .../reject`
 - Config-driven values (categories, academic-status labels, gender options, rate limits)
   live in `packages/shared/src/config.ts`, overridable via environment/config, never
   hard-coded in route handlers.

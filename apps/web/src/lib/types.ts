@@ -14,6 +14,21 @@ export interface Post {
   reactionCount: number;
   author: PostAuthor;
   viewerHasLiked: boolean;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  isPromoted: boolean;
+}
+
+export interface PostRequest {
+  id: string;
+  content: string;
+  category: string | null;
+  requestType: string;
+  linkUrl: string | null;
+  imageUrl: string | null;
+  status: "pending" | "approved" | "rejected";
+  adminNote: string | null;
+  createdAt: string;
 }
 
 export interface Comment {

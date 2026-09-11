@@ -228,6 +228,95 @@ adminRoutes.post("/users/:id/unsuspend", async (c) => {
   return ok(c, { accountStatus: "active" });
 });
 
+interface AdminPostRequestRow {
+  id: string;
+  content: string;
+  category: string | null;
+  requestType: string;
+  linkUrl: string | null;
+  imageUrl: string | null;
+  status: string;
+  adminNote: string | null;
+  authorUserId: string;
+  anonymousProfileId: string;
+  displayName: string;
+  createdAt: string;
+}
+
+adminRoutes.get("/post-requests", async (c) => {
+  const status = c.req.query("status") ?? "pending";
+  const { results } = await c.env.DB.prepare(
+    `SELECT pr.id, pr.content, pr.category, pr.request_type as requestType, pr.link_url as linkUrl,
+            pr.image_url as imageUrl, pr.status, pr.admin_note as adminNote,
+            pr.author_user_id as authorUserId, pr.anonymous_profile_id as anonymousProfileId,
+            ap.display_name as displayName, pr.created_at as createdAt
+     FROM post_requests pr
+     JOIN anonymous_profiles ap ON ap.id = pr.anonymous_profile_id
+     WHERE pr.status = ?1 ORDER BY pr.created_at ASC LIMIT 100`,
+  )
+    .bind(status)
+    .all<AdminPostRequestRow>();
+
+  return ok(c, { requests: results });
+});
+
+adminRoutes.post("/post-requests/:id/approve", async (c) => {
+  const admin = c.get("admin")!;
+  const requestId = c.req.param("id");
+
+  const request = await c.env.DB.prepare(
+    `SELECT id, author_user_id as authorUserId, anonymous_profile_id as anonymousProfileId,
+            content, category, link_url as linkUrl, image_url as imageUrl
+     FROM post_requests WHERE id = ?1 AND status = 'pending'`,
+  )
+    .bind(requestId)
+    .first<{
+      id: string;
+      authorUserId: string;
+      anonymousProfileId: string;
+      content: string;
+      category: string | null;
+      linkUrl: string | null;
+      imageUrl: string | null;
+    }>();
+  if (!request) return fail(c, "REQUEST_NOT_FOUND", "Pending request not found.", 404);
+
+  const postId = randomId();
+  const now = new Date().toISOString();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `INSERT INTO posts (id, author_user_id, anonymous_profile_id, content, category, image_url, link_url, is_promoted)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)`,
+    ).bind(postId, request.authorUserId, request.anonymousProfileId, request.content, request.category, request.imageUrl, request.linkUrl),
+    c.env.DB.prepare(
+      `UPDATE post_requests SET status = 'approved', reviewed_by = ?1, reviewed_at = ?2, published_post_id = ?3 WHERE id = ?4`,
+    ).bind(admin.userId, now, postId, requestId),
+  ]);
+
+  await logAdminAction(c.env, admin.userId, "approve_post_request", "post_request", requestId, { postId });
+  return ok(c, { status: "approved", postId });
+});
+
+adminRoutes.post("/post-requests/:id/reject", async (c) => {
+  const admin = c.get("admin")!;
+  const requestId = c.req.param("id");
+  const body = (await c.req.json().catch(() => null)) as { note?: string } | null;
+
+  const request = await c.env.DB.prepare(`SELECT id FROM post_requests WHERE id = ?1 AND status = 'pending'`)
+    .bind(requestId)
+    .first();
+  if (!request) return fail(c, "REQUEST_NOT_FOUND", "Pending request not found.", 404);
+
+  await c.env.DB.prepare(
+    `UPDATE post_requests SET status = 'rejected', reviewed_by = ?1, reviewed_at = ?2, admin_note = ?3 WHERE id = ?4`,
+  )
+    .bind(admin.userId, new Date().toISOString(), body?.note?.trim() || null, requestId)
+    .run();
+
+  await logAdminAction(c.env, admin.userId, "reject_post_request", "post_request", requestId);
+  return ok(c, { status: "rejected" });
+});
+
 adminRoutes.get("/audit-logs", async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT id, admin_user_id as adminUserId, action, target_type as targetType, target_id as targetId,

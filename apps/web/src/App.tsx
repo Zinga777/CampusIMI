@@ -9,6 +9,7 @@ import Confessions from "./pages/Confessions.js";
 import Matches from "./pages/Matches.js";
 import Chat from "./pages/Chat.js";
 import Events from "./pages/Events.js";
+import RequestPost from "./pages/RequestPost.js";
 import Admin from "./pages/Admin.js";
 import ProtectedRoute from "./components/ProtectedRoute.js";
 import AdminGuard from "./components/AdminGuard.js";
@@ -65,6 +66,14 @@ export default function App() {
         element={
           <ProtectedRoute requireProfile>
             <Events />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/request-post"
+        element={
+          <ProtectedRoute requireProfile>
+            <RequestPost />
           </ProtectedRoute>
         }
       />

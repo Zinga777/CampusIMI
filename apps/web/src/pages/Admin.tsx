@@ -52,13 +52,28 @@ interface AuditLog {
   createdAt: string;
 }
 
-type Tab = "overview" | "reports" | "posts" | "users" | "audit";
+interface AdminPostRequest {
+  id: string;
+  content: string;
+  category: string | null;
+  requestType: string;
+  linkUrl: string | null;
+  imageUrl: string | null;
+  status: string;
+  adminNote: string | null;
+  authorUserId: string;
+  displayName: string;
+  createdAt: string;
+}
+
+type Tab = "overview" | "reports" | "posts" | "requests" | "users" | "audit";
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>("overview");
   const [stats, setStats] = useState<Stats | null>(null);
   const [reports, setReports] = useState<Report[] | null>(null);
   const [posts, setPosts] = useState<AdminPost[] | null>(null);
+  const [postRequests, setPostRequests] = useState<AdminPostRequest[] | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[] | null>(null);
 
@@ -69,6 +84,10 @@ export default function Admin() {
   useEffect(() => {
     if (tab === "reports") api.get<{ reports: Report[] }>("/admin/reports?status=open").then((r) => setReports(r.reports));
     if (tab === "posts") api.get<{ posts: AdminPost[] }>("/admin/posts").then((r) => setPosts(r.posts));
+    if (tab === "requests")
+      api
+        .get<{ requests: AdminPostRequest[] }>("/admin/post-requests?status=pending")
+        .then((r) => setPostRequests(r.requests));
     if (tab === "users") api.get<{ users: AdminUser[] }>("/admin/users").then((r) => setUsers(r.users));
     if (tab === "audit") api.get<{ auditLogs: AuditLog[] }>("/admin/audit-logs").then((r) => setAuditLogs(r.auditLogs));
   }, [tab]);
@@ -89,6 +108,16 @@ export default function Admin() {
   async function restorePost(id: string) {
     await api.post(`/admin/posts/${id}/restore`);
     setPosts((prev) => prev?.map((p) => (p.id === id ? { ...p, status: "published" } : p)) ?? null);
+  }
+
+  async function approveRequest(id: string) {
+    await api.post(`/admin/post-requests/${id}/approve`);
+    setPostRequests((prev) => prev?.filter((r) => r.id !== id) ?? null);
+  }
+  async function rejectRequest(id: string) {
+    const note = window.prompt("Reason for rejecting (optional):") ?? undefined;
+    await api.post(`/admin/post-requests/${id}/reject`, { note });
+    setPostRequests((prev) => prev?.filter((r) => r.id !== id) ?? null);
   }
 
   async function suspendUser(id: string) {
@@ -113,7 +142,7 @@ export default function Admin() {
         </div>
 
         <div className="mt-6 flex gap-2 overflow-x-auto">
-          {(["overview", "reports", "posts", "users", "audit"] as Tab[]).map((t) => (
+          {(["overview", "reports", "posts", "requests", "users", "audit"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -208,6 +237,40 @@ export default function Admin() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {tab === "requests" && (
+          <div className="mt-6 space-y-3">
+            {postRequests?.map((r) => (
+              <div key={r.id} className="rounded-xl2 bg-white border border-campus-100 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-campus-100 text-campus-600 capitalize">
+                    {r.requestType}
+                  </span>
+                  <span className="text-xs text-campus-500">{new Date(r.createdAt).toLocaleString()}</span>
+                </div>
+                <p className="mt-2 text-sm text-campus-900 whitespace-pre-wrap">{r.content}</p>
+                {r.linkUrl && <p className="mt-1 text-xs text-campus-600 break-all">{r.linkUrl}</p>}
+                {r.imageUrl && <img src={r.imageUrl} alt="" className="mt-2 rounded-lg max-h-64" />}
+                <p className="mt-1 text-xs text-campus-400">From: {r.displayName}</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => approveRequest(r.id)}
+                    className="px-3 py-1.5 rounded-full bg-campus-700 text-white text-xs font-medium"
+                  >
+                    Approve & publish
+                  </button>
+                  <button
+                    onClick={() => rejectRequest(r.id)}
+                    className="px-3 py-1.5 rounded-full border border-red-200 text-red-600 text-xs font-medium"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+            {postRequests?.length === 0 && <p className="text-center text-campus-500 py-8">No pending requests.</p>}
           </div>
         )}
 

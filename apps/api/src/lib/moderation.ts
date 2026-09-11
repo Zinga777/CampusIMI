@@ -51,6 +51,29 @@ export function detectSensitiveInfo(text: string): ModerationResult {
   return { blocked: false };
 }
 
+// Links: explicit protocol/www, or a bare "word.tld" token (optionally followed by a
+// path) using a curated list of common TLDs — broad enough to catch "check this out
+// instagram.com/x" without flagging ordinary sentences that happen to contain a dot.
+const LINK_RE =
+  /\b((https?:\/\/|www\.)\S+|[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|net|org|io|co|edu|in|me|ly|gg|xyz|app|dev|info|link|biz|gov|us|uk)\b(\/\S*)?)/i;
+
+/**
+ * Blocks any link/URL in regular post or comment text. Links (and images/posters) can
+ * only reach the public feed through the admin-approved post-request queue — see
+ * `routes/post-requests.ts`. This keeps plain text free-for-all while gating anything
+ * clickable behind a human review.
+ */
+export function detectLink(text: string): ModerationResult {
+  if (LINK_RE.test(text)) {
+    return {
+      blocked: true,
+      reason:
+        "Links aren't allowed in regular posts or comments. To share a link, poster, or event, submit a request for admin approval instead.",
+    };
+  }
+  return { blocked: false };
+}
+
 // Soft accusation heuristic: verbs implying wrongdoing directed at a specific,
 // identifiable person (a proper-noun-ish capitalized token, or "he/she/they said").
 // This is a nudge, not a block — full accusation/gossip handling ships in Phase 4.

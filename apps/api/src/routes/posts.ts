@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { MAX_COMMENT_LENGTH, MAX_POST_LENGTH, POST_CATEGORIES, REACTION_TYPES } from "@campusimi/shared";
 import { fail, ok } from "../lib/response.js";
 import { randomId } from "../lib/crypto.js";
-import { detectSensitiveInfo, detectUnverifiedAccusation } from "../lib/moderation.js";
+import { detectLink, detectSensitiveInfo, detectUnverifiedAccusation } from "../lib/moderation.js";
 import { trendingScore } from "../lib/trending.js";
 import { checkAndRecordRateLimit } from "../lib/rate-limit.js";
 import { requireProfile } from "../middleware/auth.js";
@@ -29,6 +29,9 @@ interface PostRow {
   displayName: string;
   avatarUrl: string | null;
   viewerHasLiked: number;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  isPromoted: number;
 }
 
 function serializePost(row: PostRow) {
@@ -46,6 +49,9 @@ function serializePost(row: PostRow) {
       avatarUrl: row.avatarUrl,
     },
     viewerHasLiked: row.viewerHasLiked === 1,
+    imageUrl: row.imageUrl,
+    linkUrl: row.linkUrl,
+    isPromoted: row.isPromoted === 1,
   };
 }
 
@@ -81,6 +87,7 @@ postRoutes.get("/", async (c) => {
       SELECT p.id, p.content, p.category, p.created_at as createdAt,
              p.like_count as likeCount, p.comment_count as commentCount, p.reaction_count as reactionCount,
              p.anonymous_profile_id as anonymousProfileId, ap.display_name as displayName, ap.avatar_url as avatarUrl,
+             p.image_url as imageUrl, p.link_url as linkUrl, p.is_promoted as isPromoted,
              CASE WHEN pl.user_id IS NOT NULL THEN 1 ELSE 0 END as viewerHasLiked
       FROM posts p
       JOIN anonymous_profiles ap ON ap.id = p.anonymous_profile_id
@@ -110,6 +117,7 @@ postRoutes.get("/", async (c) => {
     SELECT p.id, p.content, p.category, p.created_at as createdAt,
            p.like_count as likeCount, p.comment_count as commentCount, p.reaction_count as reactionCount,
            p.anonymous_profile_id as anonymousProfileId, ap.display_name as displayName, ap.avatar_url as avatarUrl,
+           p.image_url as imageUrl, p.link_url as linkUrl, p.is_promoted as isPromoted,
            CASE WHEN pl.user_id IS NOT NULL THEN 1 ELSE 0 END as viewerHasLiked
     FROM posts p
     JOIN anonymous_profiles ap ON ap.id = p.anonymous_profile_id
@@ -138,6 +146,9 @@ postRoutes.post("/", async (c) => {
   if (body?.category && !POST_CATEGORIES.includes(body.category as (typeof POST_CATEGORIES)[number])) {
     return fail(c, "INVALID_CATEGORY", "Unknown category.");
   }
+
+  const link = detectLink(content);
+  if (link.blocked) return fail(c, "LINK_NOT_ALLOWED", link.reason!);
 
   const sensitive = detectSensitiveInfo(content);
   if (sensitive.blocked) return fail(c, "SENSITIVE_INFO", sensitive.reason!);
@@ -357,6 +368,9 @@ postRoutes.post("/:id/comments", async (c) => {
       .first();
     if (!parent) return fail(c, "PARENT_COMMENT_NOT_FOUND", "That comment no longer exists.", 404);
   }
+
+  const link = detectLink(content);
+  if (link.blocked) return fail(c, "LINK_NOT_ALLOWED", link.reason!);
 
   const sensitive = detectSensitiveInfo(content);
   if (sensitive.blocked) return fail(c, "SENSITIVE_INFO", sensitive.reason!);

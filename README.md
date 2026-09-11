@@ -32,7 +32,8 @@ rationale, database schema, and the security/anonymity threat model.
 | AI features (bio/post/conversation-starter suggestions) | ✅ Done — falls back to template suggestions with no `AI_API_KEY` configured; the same code path calls a real LLM once one is provided |
 | Campus events (create, RSVP/"interested") | ✅ Done |
 | Admin dashboard (stats, reports, posts, users, audit log) | ✅ Done |
-| Automated tests (38 tests: password hashing, trending algorithm, moderation regexes, college-domain gating, display-name generation) | ✅ Done |
+| Admin-gated promoted content (links/images blocked in regular posts+comments; students request admin approval to share a link, poster, or urgent notice) | ✅ Done — no payment processing in this version |
+| Automated tests (43 tests: password hashing, trending algorithm, moderation regexes incl. link detection, college-domain gating, display-name generation) | ✅ Done |
 | Admin-approval flow for `pending_manual_review` accounts | ⬜ Pending — DB status exists, no endpoint/UI to approve |
 | Password reset | ⬜ Pending — OTP mechanism supports it structurally, no reset endpoint/UI |
 | Admin moderation view for reported private chat messages | ⬜ Pending — messages are reportable, nothing to act on the report yet |
@@ -69,7 +70,7 @@ apps/
     .dev.vars.example   Template for local secrets (copy to .dev.vars, gitignored)
 packages/
   shared/             TypeScript types & config shared by both apps (enums, API shapes)
-migrations/           D1 SQL migrations, applied in order (0001... 0007...)
+migrations/           D1 SQL migrations, applied in order (0001... 0008...)
 seed/                 Dev-only fake data generator (never real student data)
 docs/
   ARCHITECTURE.md      Full architecture, schema, entity relationships, security notes
@@ -165,7 +166,7 @@ directly for convenience.
 ```bash
 npm run typecheck   # TypeScript across all packages
 npm run lint        # ESLint (apps/api, apps/web)
-npm run test        # Vitest — 38 tests covering crypto, moderation, trending, etc.
+npm run test        # Vitest — 43 tests covering crypto, moderation, trending, etc.
 npm run build       # Production build of all packages (also validates the Worker bundle)
 ```
 
@@ -194,6 +195,11 @@ All four currently pass clean. Run them after any change before considering it d
 - Avatar uploads verify the file's actual magic bytes match the claimed image type
   (don't trust `Content-Type` alone), and are served with `X-Content-Type-Options:
   nosniff`.
+- Regular posts/comments reject any link/URL at submission time
+  (`lib/moderation.ts` `detectLink`) — links, posters, and images can only reach the
+  feed via `post_requests`, which requires admin approval (`routes/admin.ts`
+  `/post-requests/:id/approve`) and is fully audit-logged. Uploaded request images go
+  through the same magic-byte validation as avatars.
 - See `docs/ARCHITECTURE.md` for the full list of design decisions and the residual
   risks called out there (e.g. `rate_limit_events` grows unbounded — fine for local
   dev/small scale, needs a cleanup job before real production traffic).

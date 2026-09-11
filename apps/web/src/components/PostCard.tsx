@@ -114,6 +114,11 @@ export default function PostCard({ post: initial }: { post: Post }) {
                 {POST_CATEGORY_LABELS[post.category as keyof typeof POST_CATEGORY_LABELS] ?? post.category}
               </span>
             )}
+            {post.isPromoted && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-accent-400/20 text-accent-600 font-medium">
+                Promoted
+              </span>
+            )}
           </div>
           <span className="text-xs text-campus-500">{timeAgo(post.createdAt)}</span>
         </div>
@@ -163,6 +168,20 @@ export default function PostCard({ post: initial }: { post: Post }) {
       </div>
 
       <p className="mt-3 text-campus-900 whitespace-pre-wrap">{post.content}</p>
+
+      {post.imageUrl && (
+        <img src={post.imageUrl} alt="" className="mt-3 rounded-lg max-h-96 w-full object-cover" />
+      )}
+      {post.linkUrl && (
+        <a
+          href={post.linkUrl}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          className="mt-3 block rounded-lg border border-campus-100 bg-campus-50 px-3 py-2 text-sm text-campus-700 hover:text-campus-900 break-all"
+        >
+          {post.linkUrl}
+        </a>
+      )}
 
       <div className="mt-4 flex items-center gap-5 text-sm text-campus-600">
         <button

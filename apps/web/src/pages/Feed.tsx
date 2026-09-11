@@ -60,6 +60,9 @@ export default function Feed() {
             <Link to="/events" className="text-sm text-campus-600 hover:text-campus-800">
               Events
             </Link>
+            <Link to="/request-post" className="text-sm text-campus-600 hover:text-campus-800">
+              Share a link/poster
+            </Link>
             <Link to="/matches" className="text-sm text-campus-600 hover:text-campus-800">
               Connections
             </Link>

@@ -17,6 +17,7 @@ import { matchRoutes } from "./routes/matches.js";
 import { conversationRoutes } from "./routes/conversations.js";
 import { aiRoutes } from "./routes/ai.js";
 import { eventRoutes } from "./routes/events.js";
+import { postRequestRoutes } from "./routes/post-requests.js";
 import type { Env, Variables } from "./types.js";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -57,6 +58,7 @@ app.route("/api/v1/matches", matchRoutes);
 app.route("/api/v1/conversations", conversationRoutes);
 app.route("/api/v1/ai", aiRoutes);
 app.route("/api/v1/events", eventRoutes);
+app.route("/api/v1/post-requests", postRequestRoutes);
 
 app.notFound((c) => fail(c, "NOT_FOUND", "Not found.", 404));
 
