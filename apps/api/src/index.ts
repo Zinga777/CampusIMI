@@ -4,6 +4,8 @@ import { ApiException, fail } from "./lib/response.js";
 import { resolveSession } from "./middleware/auth.js";
 import { authRoutes } from "./routes/auth.js";
 import { configRoutes } from "./routes/config.js";
+import { profileRoutes } from "./routes/profile.js";
+import { mediaRoutes } from "./routes/media.js";
 import type { Env, Variables } from "./types.js";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -22,6 +24,8 @@ app.use("/api/v1/*", resolveSession);
 
 app.route("/api/v1/config", configRoutes);
 app.route("/api/v1/auth", authRoutes);
+app.route("/api/v1/profile", profileRoutes);
+app.route("/api/v1/media", mediaRoutes);
 
 app.notFound((c) => fail(c, "NOT_FOUND", "Not found.", 404));
 

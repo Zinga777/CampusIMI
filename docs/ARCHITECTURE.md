@@ -273,4 +273,10 @@ For now:
 
 ## Phase Log
 
-- **Phase 1 (Foundation):** in progress — see commits on this branch.
+- **Phase 1 (Foundation):** done. Monorepo, D1 users/sessions/OTP schema, college-domain
+  gated register/verify/login/logout/me, landing page.
+- **Phase 2 (Anonymous identity):** done. `anonymous_profiles` create/read/update,
+  server-generated unique display names with a reserved-name blocklist, mandatory
+  `academic_status`/`gender`, optional bio/course/interests, sensitive-info detection on
+  bios, optional custom avatar upload to R2 with public serving, onboarding UI gating
+  feed access until a profile exists.

@@ -17,7 +17,7 @@ export default function App() {
       <Route
         path="/onboarding"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requireNoProfile>
             <Onboarding />
           </ProtectedRoute>
         }
@@ -25,7 +25,7 @@ export default function App() {
       <Route
         path="/feed"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requireProfile>
             <Feed />
           </ProtectedRoute>
         }
