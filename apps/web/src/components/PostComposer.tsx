@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useConfig } from "../lib/config-context.js";
 import { api, ApiError } from "../lib/api.js";
+import AiSuggestButton from "./AiSuggestButton.js";
 
 export default function PostComposer({ onPosted }: { onPosted: () => void }) {
   const config = useConfig();
@@ -46,6 +47,16 @@ export default function PostComposer({ onPosted }: { onPosted: () => void }) {
         placeholder="What's happening on campus? Post anonymously…"
         className="w-full rounded-lg border border-campus-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-campus-400 resize-none"
       />
+      {content.trim().length > 0 && (
+        <div className="mt-2">
+          <AiSuggestButton
+            label="Improve with AI"
+            endpoint="/ai/rewrite-post"
+            body={{ content }}
+            onPick={setContent}
+          />
+        </div>
+      )}
       <div className="mt-3 flex items-center justify-between gap-3">
         <select
           value={category}

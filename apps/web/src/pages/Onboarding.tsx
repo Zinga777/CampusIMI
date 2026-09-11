@@ -4,6 +4,7 @@ import { api, ApiError } from "../lib/api.js";
 import { useConfig } from "../lib/config-context.js";
 import { useAuth } from "../lib/auth-context.js";
 import { fallbackAvatarDataUri } from "../lib/avatar.js";
+import AiSuggestButton from "../components/AiSuggestButton.js";
 
 export default function Onboarding() {
   const config = useConfig();
@@ -134,9 +135,17 @@ export default function Onboarding() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-campus-700 mb-1">
-              Bio (optional, up to {config.limits.maxBioLength} characters)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-campus-700">
+                Bio (optional, up to {config.limits.maxBioLength} characters)
+              </label>
+              <AiSuggestButton
+                label="Suggest a bio"
+                endpoint="/ai/bio"
+                body={{ interests, course: course || undefined }}
+                onPick={setBio}
+              />
+            </div>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { PublicAnonymousProfile } from "@campusimi/shared";
 import { api } from "../lib/api.js";
+import AiSuggestButton from "../components/AiSuggestButton.js";
 
 interface Message {
   id: string;
@@ -98,6 +99,20 @@ export default function Chat() {
       </main>
 
       <div className="max-w-2xl mx-auto w-full px-6 pb-6">
+        <div className="flex gap-4 mb-2">
+          <AiSuggestButton
+            label="Conversation starter"
+            endpoint="/ai/conversation-starters"
+            body={{ conversationId }}
+            onPick={setDraft}
+          />
+          <AiSuggestButton
+            label="Plan something together"
+            endpoint="/ai/date-plan"
+            body={{ conversationId }}
+            onPick={setDraft}
+          />
+        </div>
         <div className="flex gap-2">
           <input
             value={draft}

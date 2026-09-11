@@ -338,3 +338,23 @@ For now:
   third, unrelated user is rejected (403) from reading the conversation's history —
   and the same flow (open connections → open chat → live send/receive across two
   separate browser contexts) was exercised with a real headless-browser session.
+- **Phase 7 (AI features):** done. A thin `lib/ai.ts` abstraction: when `AI_API_KEY`
+  isn't configured (the default here — no real credentials are available in this
+  environment), every call falls back to a deterministic template generator so the
+  feature is fully testable offline; when a key is configured the same call shape
+  routes to an OpenAI-compatible chat-completion endpoint instead. Every call receives
+  only interests/course/shared-interests/post text — never email, password, student
+  id, internal user id, or location. Four endpoints, each behind the AI rate limit:
+  bio suggestions (usable during onboarding, before a profile exists — accepts
+  interests/course from the form directly, falls back to the saved profile once one
+  exists), post rewriting, conversation starters, and "plan something together" date
+  ideas (the latter two derive shared interests from the two participants after
+  re-verifying the caller belongs to that conversation — the same IDOR check as
+  messaging). Nothing is ever auto-published/sent: the frontend always shows
+  suggestions in a picker the student must click to insert into their own
+  draft/composer, which they can still edit before submitting. Verified end-to-end via
+  `wrangler dev --local` (all four endpoints returning template suggestions, an
+  unrelated conversation id correctly rejected with 403, and the AI rate limit tripping
+  at the configured threshold) and the rewrite-suggestion picker was exercised in a
+  real headless-browser session (including seeing the rate-limit error surface
+  gracefully once the quota from an earlier test run was already exhausted).
