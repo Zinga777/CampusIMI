@@ -72,7 +72,7 @@ apps/
     .dev.vars.example   Template for local secrets (copy to .dev.vars, gitignored)
 packages/
   shared/             TypeScript types & config shared by both apps (enums, API shapes)
-migrations/           D1 SQL migrations, applied in order (0001... 0008...)
+migrations/           D1 SQL migrations, applied in order (0001... 0010...)
 seed/                 Dev-only fake data generator (never real student data)
 docs/
   ARCHITECTURE.md      Full architecture, schema, entity relationships, security notes
@@ -197,6 +197,10 @@ All four currently pass clean. Run them after any change before considering it d
 - Avatar uploads verify the file's actual magic bytes match the claimed image type
   (don't trust `Content-Type` alone), and are served with `X-Content-Type-Options:
   nosniff`.
+- The Discover swipe deck only ever serializes avatar + nickname — bio, gender,
+  academic status, course, and interests are withheld until a match, and even then only
+  reveal per-field once both sides in `profile_reveals` opt in for that specific field
+  (`GET/POST /conversations/:id/reveals`, IDOR-checked the same way message sending is).
 - Matched/chat messages run the same `detectSensitiveInfo` check as posts (warn +
   "send anyway", not a hard block, since two matched people may legitimately choose to
   exchange real contact info) — otherwise nothing stopped someone from typing a phone
