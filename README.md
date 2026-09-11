@@ -1,107 +1,208 @@
 # CampusIMI
 
 A private, anonymous social network for a single college (~500 students), gated by
-college email verification. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the
-full architecture, schema, and design rationale.
+college email verification. Think Reddit + anonymous confessions + a lightweight,
+secondary dating/matching feature — not a dating app first.
 
-> **Status:** local development only. No remote git origin is configured and nothing is
-> deployed to Cloudflare — see "Local development only" below.
+Students post anonymously (confessions, gossip, campus chatter, rants), react and
+comment, and can optionally send anonymous confessions to each other; when two people
+have independently confessed interest in each other, they unlock an anonymous real-time
+chat. Every anonymous action is tied internally to the real account for moderation
+purposes, but that link is **never** exposed to other students or in any public API
+response — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design
+rationale, database schema, and the security/anonymity threat model.
 
-## Stack
+> **Status:** fully functional for local development. Every feature phase below is
+> built and tested against `wrangler dev --local` + Vite. Production deployment to
+> Cloudflare has **not** been done — see "What's pending" below.
 
-React + TypeScript + Tailwind (frontend) · Cloudflare Workers + Hono (API) · Cloudflare D1
-(database) · Cloudflare R2 (media) · Durable Objects (chat, from Phase 6 onward).
+## What's done vs. pending
+
+| Feature | Status |
+|---|---|
+| Auth (college-domain-gated signup, OTP email verification) | ✅ Done |
+| Anonymous identity (mandatory academic status + gender, bio, avatar upload) | ✅ Done |
+| Campus feed (posts, likes, reactions, comments, trending/latest/discussed/popular) | ✅ Done |
+| Moderation & safety (reports, blocks, rate limits, admin API, audit log) | ✅ Done |
+| Confessions + mutual-interest detection + notifications | ✅ Done |
+| Matching & anonymous real-time chat (Cloudflare Durable Objects) | ✅ Done |
+| AI features (bio/post/conversation-starter suggestions) | ✅ Done — falls back to template suggestions with no `AI_API_KEY` configured; the same code path calls a real LLM once one is provided |
+| Campus events (create, RSVP/"interested") | ✅ Done |
+| Admin dashboard (stats, reports, posts, users, audit log) | ✅ Done |
+| Automated tests (38 tests: password hashing, trending algorithm, moderation regexes, college-domain gating, display-name generation) | ✅ Done |
+| Admin-approval flow for `pending_manual_review` accounts | ⬜ Pending — DB status exists, no endpoint/UI to approve |
+| Password reset | ⬜ Pending — OTP mechanism supports it structurally, no reset endpoint/UI |
+| Admin moderation view for reported private chat messages | ⬜ Pending — messages are reportable, nothing to act on the report yet |
+| Login brute-force rate limiting | ⬜ Pending — not in original spec, worth adding before real users |
+| Cloudflare production deployment | ⬜ Not started (out of scope so far — this repo has only run against local emulation) |
+
+## Tech stack
+
+- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS, `react-router-dom`, `lucide-react` icons.
+- **Backend:** Cloudflare Workers + [Hono](https://hono.dev) (routing/middleware).
+- **Database:** Cloudflare D1 (SQLite), plain parameterized SQL (no ORM).
+- **File storage:** Cloudflare R2 (avatar uploads, magic-byte validated).
+- **Realtime:** Cloudflare Durable Objects + WebSockets (anonymous chat).
+- **Auth:** Session cookies (HttpOnly, SameSite=Lax, `Secure` only over HTTPS), PBKDF2 password hashing via Web Crypto.
+- **Testing:** Vitest.
+- **Monorepo:** npm workspaces (no Turborepo/Nx — kept deliberately simple).
 
 ## Project layout
 
 ```
-apps/web       React (Vite) frontend
-apps/api       Cloudflare Worker API (Hono)
-packages/shared  Shared TypeScript types & config, used by both apps
-migrations/     D1 SQL migrations
-seed/           Dev-only fake seed data
-docs/           Architecture notes
+apps/
+  web/                React (Vite) frontend
+    src/
+      pages/          Route-level screens (Feed, Chat, Admin, Events, ...)
+      components/     Reusable UI pieces
+      lib/             API client, auth/config React contexts
+  api/                Cloudflare Worker API (Hono)
+    src/
+      routes/         One file per resource (posts, auth, admin, matches, ...)
+      middleware/      Session auth + admin-authorization guards
+      lib/             Crypto, rate limiting, moderation filters, trending algorithm
+      durable-objects/ ChatRoom (realtime chat)
+      *.test.ts        Vitest unit tests, colocated with the code they test
+    wrangler.toml       Worker config: D1/R2/Durable Object bindings, non-secret vars
+    .dev.vars.example   Template for local secrets (copy to .dev.vars, gitignored)
+packages/
+  shared/             TypeScript types & config shared by both apps (enums, API shapes)
+migrations/           D1 SQL migrations, applied in order (0001... 0007...)
+seed/                 Dev-only fake data generator (never real student data)
+docs/
+  ARCHITECTURE.md      Full architecture, schema, entity relationships, security notes
+.env.example           Reference doc for every config value the Worker uses (see note below)
 ```
 
-## Local development only
+## Getting started (fresh unzip, any machine)
 
-Per project requirements, this repository is developed **entirely locally** for now:
-no remote git origin, no `wrangler deploy`, no production Cloudflare resources. All
-commands below use `wrangler dev --local` / D1's local emulated mode and never touch a
-real Cloudflare account.
-
-## Getting started
+Requires Node.js 18+ and npm. No Cloudflare account, no login, and no external
+credentials are needed for local development — everything runs against Cloudflare's
+local emulation.
 
 ```bash
 npm install
-cp .env.example .env
-cp apps/api/.dev.vars.example apps/api/.dev.vars   # local secrets, gitignored
 
-# apply D1 migrations to the local emulated database
+# Worker secrets (SESSION_SECRET, AI_API_KEY) — gitignored, never committed
+cp apps/api/.dev.vars.example apps/api/.dev.vars
+
+# apply D1 migrations to a fresh local database
 npm run db:migrate:local
 
-# (optional) load dev-only fake data — run once against a fresh database;
-# it is not idempotent (re-running errors on duplicate emails, harmlessly)
+# (optional) load dev-only fake data — see "Seed data & test credentials" below
 npm run seed:local
 
-# run the API (Worker, local D1/R2 emulation) and the web frontend together
+# run both the API (Worker) and the web frontend together
 npm run dev
 ```
 
-### Dev-only seed data
+Then open **http://localhost:5173** in your browser.
 
-`npm run seed:local` (run from the repo root, or `apps/api`) generates ~40 fake
-students (varied academic status/gender/course/interests), ~100 posts, ~150 comments,
-likes/reactions, a mix of confessions (including a couple of guaranteed mutual pairs
-with an active match + conversation + messages), and a handful of campus events —
-then applies it to the local D1 database via `wrangler d1 execute --local`. Every
-seeded student shares the dev-only password `password123` (e.g. log in as
-`student1@college.edu` — check the script's console output for the exact seeded
-email, since domains are assigned randomly from `COLLEGE_EMAIL_DOMAINS`). This is
-clearly dev-only fake data — never real student information — and is meant to be run
-once against a freshly-migrated database.
+- Frontend: http://localhost:5173
+- API: http://localhost:8787 (the frontend proxies `/api/*` — including the chat
+  WebSocket — to this automatically; you don't need to open it directly)
 
-- API: http://127.0.0.1:8787 (proxied by the frontend dev server under `/api`)
-- Web: http://127.0.0.1:5173
+To stop: `Ctrl+C` once (it stops both processes).
 
-Edit `COLLEGE_NAME` / `COLLEGE_EMAIL_DOMAINS` in `apps/api/wrangler.toml` (or `.env`) to
-match your college — registration checks the domain of every signup email against this
-list before creating an account.
+### A note on configuration files
 
-Since no real email provider is wired up yet, `POST /api/v1/auth/register` logs the OTP
-to the Worker console and also returns it in the response body under `devOtp` (dev-mode
-only) so you can complete verification locally without a mailbox.
+Non-secret config (college name/domains, rate limits, CORS allowlist) lives in
+`apps/api/wrangler.toml`'s `[vars]` block, already filled in with working local
+defaults — edit values there directly. The two real secrets (`SESSION_SECRET`,
+`AI_API_KEY`) come from `apps/api/.dev.vars`, which you create from
+`.dev.vars.example` above. The root `.env.example` is a **reference document**
+listing every variable and what it does — nothing in this repo automatically reads a
+root `.env` file (no `dotenv`, no `process.env` reads), so copying it to `.env` alone
+won't change any behavior; it exists so you have one place to see everything that's
+configurable and why.
+
+### Seed data & test credentials
+
+`npm run seed:local` generates ~40 fake students (varied academic status, gender,
+course, interests), ~100 posts, ~150 comments, likes/reactions, a mix of confessions
+(including two guaranteed mutual-interest pairs with an active match + conversation +
+messages already seeded), and a handful of campus events. It's clearly **dev-only fake
+data — never real student information** — and prints exactly which accounts it created.
+
+- **Password for every seeded account:** `password123`
+- **Exact emails:** printed to the console when you run the seed script (each
+  student's college-email domain is picked randomly from `COLLEGE_EMAIL_DOMAINS`, so
+  there's no fixed list — e.g. it might print `student1@college.edu` or
+  `student7@cse.college.edu`). Look for the line `Example login: ...` at the end of
+  the script's output, or query them yourself:
+  ```bash
+  cd apps/api
+  npx wrangler d1 execute campusimi-db --local --command "SELECT email FROM users LIMIT 10"
+  ```
+- Not idempotent: re-running the seed script against a database that already has it
+  loaded will error on duplicate emails (harmlessly) — run it once per fresh database.
+
+**To test as an admin:** no seeded account is an admin by default. Register any
+account through the UI (or reuse a seeded one), verify it, then promote it via the
+one-time bootstrap endpoint (works only while no admin exists yet):
+
+```bash
+# after logging in through the browser, grab the session cookie from devtools, or:
+curl -c cookies.txt -X POST http://localhost:8787/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"YOUR_SEEDED_OR_REGISTERED_EMAIL","password":"password123"}'
+
+curl -b cookies.txt -X POST http://localhost:8787/api/v1/admin/bootstrap
+```
+
+Then visit `/admin` in the browser while logged in as that account.
+
+**No real email provider is configured** — `POST /api/v1/auth/register` (and
+resend-otp) logs the verification code to the Worker's terminal output and also
+returns it in the response body as `devOtp` (dev-mode only), so you can complete
+signup end-to-end without a mailbox. The registration/verification UI shows this code
+directly for convenience.
 
 ## Checks
 
 ```bash
-npm run typecheck
-npm run lint
-npm run test
-npm run build
+npm run typecheck   # TypeScript across all packages
+npm run lint        # ESLint (apps/api, apps/web)
+npm run test        # Vitest — 38 tests covering crypto, moderation, trending, etc.
+npm run build       # Production build of all packages (also validates the Worker bundle)
 ```
 
-## Development phases
+All four currently pass clean. Run them after any change before considering it done.
 
-Built incrementally and sequentially, per `docs/ARCHITECTURE.md`:
+## Security notes for whoever continues this
 
-1. **Foundation** — monorepo, D1 schema, college-domain-gated auth, landing page. ✅
-2. Anonymous identity (mandatory academic status + gender, bio, avatar)
-3. Campus feed (posts, likes, comments, trending)
-4. Moderation & safety (reports, blocks, rate limits, admin dashboard, audit log)
-5. Confessions
-6. Connections & anonymous chat (Durable Objects)
-7. AI features (advisory only, user-approved before publish/send)
-8. Campus events
-9. Admin & analytics
-10. Security & production deployment — **intentionally deferred**, see task scope.
-
-## Security notes
-
-- `email` is never returned from any public-facing endpoint except the owner's own
-  `/auth/me` context, and is enforced `UNIQUE` at the database level.
-- Sessions are opaque tokens; only their SHA-256 hash is stored server-side.
+- `email` is never returned from any endpoint except the owner's own `/auth/me`, and
+  is `UNIQUE` at the database level.
+- Sessions are opaque random tokens; only their SHA-256 hash is stored server-side.
+  The `Secure` cookie attribute is conditional on the request being served over HTTPS
+  (required for it to work locally over plain HTTP — don't hardcode it back to `true`).
+- CORS validates the request `Origin` against the `ALLOWED_ORIGINS` allowlist in
+  `wrangler.toml` — never change this back to reflecting an arbitrary origin while
+  `credentials: true` is set; that combination lets any website make
+  cookie-authenticated requests to the API on a logged-in user's behalf.
 - Every protected endpoint resolves the acting user from the session — never from a
-  client-supplied id — to prevent IDOR.
+  client-supplied id — to prevent IDOR. This is especially load-bearing in
+  `apps/api/src/routes/conversations.ts` (`assertParticipant`), which the WebSocket
+  chat route depends on before ever forwarding a connection to the Durable Object.
+- The real `user_id` is never serialized to a normal client anywhere — only an
+  `anonymous_profile_id` is. Admin-only endpoints are the sole exception (by design,
+  for moderation), and every admin action is written to `audit_logs`.
 - API errors never leak stack traces or internal details; every response follows the
-  `{ success, data }` / `{ success: false, error }` envelope.
+  `{ success, data }` / `{ success: false, error: { code, message } }` envelope.
+- Avatar uploads verify the file's actual magic bytes match the claimed image type
+  (don't trust `Content-Type` alone), and are served with `X-Content-Type-Options:
+  nosniff`.
+- See `docs/ARCHITECTURE.md` for the full list of design decisions and the residual
+  risks called out there (e.g. `rate_limit_events` grows unbounded — fine for local
+  dev/small scale, needs a cleanup job before real production traffic).
+
+## Deploying (not done yet)
+
+This repo has only ever run against Cloudflare's local emulation
+(`wrangler dev --local`, local D1/R2/Durable Objects) — no `wrangler deploy` has been
+run, and `wrangler.toml` has no `account_id` or production routes configured. To take
+this to production you'd need to: create the real D1 database and R2 bucket in a
+Cloudflare account, update `wrangler.toml` with the real `database_id`/`account_id`,
+set real secrets via `wrangler secret put`, tighten `ALLOWED_ORIGINS` to the real
+frontend origin, and decide how `apps/web`'s build output gets served (Cloudflare
+Pages, or as Worker static assets).
