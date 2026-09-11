@@ -280,3 +280,11 @@ For now:
   `academic_status`/`gender`, optional bio/course/interests, sensitive-info detection on
   bios, optional custom avatar upload to R2 with public serving, onboarding UI gating
   feed access until a profile exists.
+- **Phase 3 (Campus feed):** done. Post create/list/like/react, comments + comment
+  likes, category filter, trending/latest/discussed/popular feed modes with pagination.
+  Trending is computed in application code over a bounded recent window (time-decayed
+  gravity formula) rather than in SQL, to avoid depending on SQLite math-function
+  availability. Sensitive-info blocking and an unverified-accusation confirmation flow
+  (client must explicitly "post anyway") are wired into both posts and comments. Verified
+  end-to-end via `wrangler dev --local` (API) and a real headless-browser run through
+  register → verify → onboard → post → like → switch feed modes.
