@@ -288,3 +288,20 @@ For now:
   (client must explicitly "post anyway") are wired into both posts and comments. Verified
   end-to-end via `wrangler dev --local` (API) and a real headless-browser run through
   register → verify → onboard → post → like → switch feed modes.
+- **Phase 4 (Moderation & safety):** done. Reports (any student can report a
+  post/comment/profile/message with a reason + optional description), blocks (server
+  resolves the target's real user id itself — the client only ever knows the anonymous
+  profile id — and mutually excludes blocked users' posts from the feed), per-user D1-
+  backed sliding-window rate limits (posts/comments/likes, configurable via env), and a
+  first `/admin` API surface: stats, report queue + resolve, hide/remove/restore/hard-
+  delete on posts and comments, suspend/unsuspend (suspension always a deliberate human
+  action, never automatic on report count — suspending also revokes all sessions), and
+  an audit log every admin action writes to. The very first admin is created via a
+  one-time `/admin/bootstrap` endpoint that only works while no admin exists yet.
+  Frontend: a report dialog and a per-post "more" menu (report / hide locally / block
+  author). A full `/admin` UI dashboard is still Phase 9 — the API is complete and
+  tested now. Verified end-to-end via `wrangler dev --local` (bootstrap, authorization
+  enforcement, report → admin hide → post disappears from feed, block → author's posts
+  disappear from the blocker's feed, suspend → login rejected → unsuspend → login
+  succeeds, rate limit tripping at the configured threshold) and the report dialog was
+  exercised in a real headless-browser session.

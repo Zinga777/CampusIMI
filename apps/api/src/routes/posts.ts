@@ -4,6 +4,7 @@ import { fail, ok } from "../lib/response.js";
 import { randomId } from "../lib/crypto.js";
 import { detectSensitiveInfo, detectUnverifiedAccusation } from "../lib/moderation.js";
 import { trendingScore } from "../lib/trending.js";
+import { checkAndRecordRateLimit } from "../lib/rate-limit.js";
 import { requireProfile } from "../middleware/auth.js";
 import type { Env, Variables } from "../types.js";
 
@@ -66,6 +67,11 @@ postRoutes.get("/", async (c) => {
   }
 
   const categoryClause = category ? "AND p.category = ?2" : "";
+  const blockClause = `AND NOT EXISTS (
+    SELECT 1 FROM blocks bl
+    WHERE (bl.blocker_user_id = ?1 AND bl.blocked_user_id = p.author_user_id)
+       OR (bl.blocked_user_id = ?1 AND bl.blocker_user_id = p.author_user_id)
+  )`;
   const bindings: unknown[] = [user.id];
   if (category) bindings.push(category);
 
@@ -79,7 +85,7 @@ postRoutes.get("/", async (c) => {
       FROM posts p
       JOIN anonymous_profiles ap ON ap.id = p.anonymous_profile_id
       LEFT JOIN post_likes pl ON pl.post_id = p.id AND pl.user_id = ?1
-      WHERE p.status = 'published' AND p.created_at >= ?${category ? 3 : 2} ${categoryClause}
+      WHERE p.status = 'published' AND p.created_at >= ?${category ? 3 : 2} ${categoryClause} ${blockClause}
       ORDER BY p.created_at DESC
       LIMIT ${TRENDING_CANDIDATE_LIMIT}`;
     bindings.push(windowStart);
@@ -108,7 +114,7 @@ postRoutes.get("/", async (c) => {
     FROM posts p
     JOIN anonymous_profiles ap ON ap.id = p.anonymous_profile_id
     LEFT JOIN post_likes pl ON pl.post_id = p.id AND pl.user_id = ?1
-    WHERE p.status = 'published' ${categoryClause}
+    WHERE p.status = 'published' ${categoryClause} ${blockClause}
     ORDER BY ${orderBy}
     LIMIT ?${limitParamIndex} OFFSET ?${offsetParamIndex}`;
   bindings.push(limit, offset);
@@ -141,6 +147,11 @@ postRoutes.post("/", async (c) => {
     return ok(c, { needsConfirmation: true, warning: accusation.reason });
   }
 
+  const rateLimit = await checkAndRecordRateLimit(c.env, user.id, "post");
+  if (!rateLimit.allowed) {
+    return fail(c, "RATE_LIMITED", `You've reached the limit of ${rateLimit.limit} posts per hour.`, 429);
+  }
+
   const id = randomId();
   await c.env.DB.prepare(
     `INSERT INTO posts (id, author_user_id, anonymous_profile_id, content, category)
@@ -165,6 +176,11 @@ postRoutes.post("/:id/like", async (c) => {
     .bind(postId, user.id)
     .first();
   if (already) return ok(c, { liked: true });
+
+  const rateLimit = await checkAndRecordRateLimit(c.env, user.id, "like");
+  if (!rateLimit.allowed) {
+    return fail(c, "RATE_LIMITED", `You've reached the limit of ${rateLimit.limit} likes per minute.`, 429);
+  }
 
   await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO post_likes (id, post_id, user_id) VALUES (?1, ?2, ?3)`).bind(
@@ -340,6 +356,11 @@ postRoutes.post("/:id/comments", async (c) => {
   const accusation = detectUnverifiedAccusation(content);
   if (accusation.reason && !body?.confirmWarning) {
     return ok(c, { needsConfirmation: true, warning: accusation.reason });
+  }
+
+  const rateLimit = await checkAndRecordRateLimit(c.env, user.id, "comment");
+  if (!rateLimit.allowed) {
+    return fail(c, "RATE_LIMITED", `You've reached the limit of ${rateLimit.limit} comments per minute.`, 429);
   }
 
   const id = randomId();

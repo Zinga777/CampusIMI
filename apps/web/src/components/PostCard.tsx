@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Heart, MessageCircle } from "lucide-react";
+import { Heart, MessageCircle, MoreHorizontal } from "lucide-react";
 import type { Post, Comment } from "../lib/types.js";
 import { api, ApiError } from "../lib/api.js";
 import { fallbackAvatarDataUri } from "../lib/avatar.js";
 import { POST_CATEGORY_LABELS } from "@campusimi/shared";
+import ReportDialog from "./ReportDialog.js";
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -21,6 +22,20 @@ export default function PostCard({ post: initial }: { post: Post }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentWarning, setCommentWarning] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+
+  async function blockAuthor() {
+    setMenuOpen(false);
+    try {
+      await api.post("/blocks", { anonymousProfileId: post.author.anonymousProfileId });
+      setBlocked(true);
+    } catch {
+      // no-op — surfacing a toast is out of scope here
+    }
+  }
 
   async function toggleLike() {
     const wasLiked = post.viewerHasLiked;
@@ -73,6 +88,14 @@ export default function PostCard({ post: initial }: { post: Post }) {
     }
   }
 
+  if (hidden || blocked) {
+    return (
+      <div className="rounded-xl2 bg-white border border-campus-100 p-5 text-sm text-campus-500">
+        {blocked ? "You've blocked this student. Their posts are hidden from your feed." : "Post hidden."}
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl2 bg-white border border-campus-100 p-5">
       <div className="flex items-center gap-3">
@@ -91,6 +114,40 @@ export default function PostCard({ post: initial }: { post: Post }) {
             )}
           </div>
           <span className="text-xs text-campus-500">{timeAgo(post.createdAt)}</span>
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="text-campus-400 hover:text-campus-600 p-1"
+            title="More"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 mt-1 w-40 bg-white border border-campus-100 rounded-lg shadow-lg z-10 text-sm overflow-hidden">
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setReportOpen(true);
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-campus-50 text-campus-700"
+              >
+                Report
+              </button>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setHidden(true);
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-campus-50 text-campus-700"
+              >
+                Hide
+              </button>
+              <button onClick={blockAuthor} className="w-full text-left px-3 py-2 hover:bg-campus-50 text-red-600">
+                Block {post.author.displayName}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -155,6 +212,10 @@ export default function PostCard({ post: initial }: { post: Post }) {
             </div>
           )}
         </div>
+      )}
+
+      {reportOpen && (
+        <ReportDialog contentType="post" contentId={post.id} onClose={() => setReportOpen(false)} />
       )}
     </div>
   );

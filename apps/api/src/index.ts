@@ -8,6 +8,9 @@ import { profileRoutes } from "./routes/profile.js";
 import { mediaRoutes } from "./routes/media.js";
 import { postRoutes } from "./routes/posts.js";
 import { commentRoutes } from "./routes/comments.js";
+import { blockRoutes } from "./routes/blocks.js";
+import { reportRoutes } from "./routes/reports.js";
+import { adminRoutes } from "./routes/admin.js";
 import type { Env, Variables } from "./types.js";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -30,6 +33,9 @@ app.route("/api/v1/profile", profileRoutes);
 app.route("/api/v1/media", mediaRoutes);
 app.route("/api/v1/posts", postRoutes);
 app.route("/api/v1/comments", commentRoutes);
+app.route("/api/v1/blocks", blockRoutes);
+app.route("/api/v1/reports", reportRoutes);
+app.route("/api/v1/admin", adminRoutes);
 
 app.notFound((c) => fail(c, "NOT_FOUND", "Not found.", 404));
 

@@ -25,7 +25,13 @@ export interface AuthedUser {
   anonymousProfileId: string | null;
 }
 
+export interface AdminContext {
+  userId: string;
+  role: "moderator" | "admin";
+}
+
 /** Hono variable map for this app. */
 export type Variables = {
   user: AuthedUser | null;
+  admin: AdminContext | null;
 };

@@ -13,6 +13,7 @@ type AppContext = Context<{ Bindings: Env; Variables: Variables }>;
 export async function resolveSession(c: AppContext, next: Next) {
   const token = getCookie(c, SESSION_COOKIE);
   c.set("user", null);
+  c.set("admin", null);
 
   if (token) {
     const tokenHash = await sha256Hex(token);
