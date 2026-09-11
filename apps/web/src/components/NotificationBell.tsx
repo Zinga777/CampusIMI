@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 
 interface Notification {
@@ -20,6 +20,13 @@ const LABELS: Record<string, string> = {
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  async function connect(withProfileId: string) {
+    const res = await api.post<{ conversationId: string }>("/matches", { anonymousProfileId: withProfileId });
+    setOpen(false);
+    navigate(`/chat/${res.conversationId}`);
+  }
 
   async function load() {
     const res = await api.get<{ notifications: Notification[] }>("/notifications");
@@ -62,6 +69,14 @@ export default function NotificationBell() {
           {notifications.map((n) => (
             <div key={n.id} className={`px-3 py-2 text-sm border-b border-campus-50 ${n.isRead ? "text-campus-500" : "text-campus-900 font-medium"}`}>
               {LABELS[n.type] ?? n.type}
+              {n.type === "mutual_interest" && typeof n.payload?.withProfileId === "string" && (
+                <button
+                  onClick={() => connect(n.payload!.withProfileId as string)}
+                  className="ml-2 mt-1 block px-2.5 py-1 rounded-full bg-campus-700 text-white text-xs font-medium"
+                >
+                  Connect
+                </button>
+              )}
             </div>
           ))}
         </div>

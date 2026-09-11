@@ -1,6 +1,7 @@
 export interface Env {
   DB: D1Database;
   MEDIA: R2Bucket;
+  CHAT_ROOMS: DurableObjectNamespace;
 
   COLLEGE_NAME: string;
   COLLEGE_EMAIL_DOMAINS: string;

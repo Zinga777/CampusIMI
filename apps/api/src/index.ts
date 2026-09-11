@@ -13,7 +13,11 @@ import { reportRoutes } from "./routes/reports.js";
 import { adminRoutes } from "./routes/admin.js";
 import { confessionRoutes } from "./routes/confessions.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { matchRoutes } from "./routes/matches.js";
+import { conversationRoutes } from "./routes/conversations.js";
 import type { Env, Variables } from "./types.js";
+
+export { ChatRoom } from "./durable-objects/ChatRoom.js";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -40,6 +44,8 @@ app.route("/api/v1/reports", reportRoutes);
 app.route("/api/v1/admin", adminRoutes);
 app.route("/api/v1/confessions", confessionRoutes);
 app.route("/api/v1/notifications", notificationRoutes);
+app.route("/api/v1/matches", matchRoutes);
+app.route("/api/v1/conversations", conversationRoutes);
 
 app.notFound((c) => fail(c, "NOT_FOUND", "Not found.", 404));
 

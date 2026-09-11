@@ -16,6 +16,14 @@ migrations_dir = "../../migrations"
 binding = "MEDIA"
 bucket_name = "campusimi-media"
 
+[[durable_objects.bindings]]
+name = "CHAT_ROOMS"
+class_name = "ChatRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatRoom"]
+
 [vars]
 COLLEGE_NAME = "Example College of Engineering"
 COLLEGE_EMAIL_DOMAINS = "cse.college.edu,ece.college.edu,college.edu"

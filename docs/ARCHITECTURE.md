@@ -318,3 +318,23 @@ For now:
   firing correctly for both sides, double-response rejected) and the confession-send →
   notification-bell → confessions-page flow was exercised in a real headless-browser
   session across two separate logged-in users.
+- **Phase 6 (Connections & anonymous chat):** done. `POST /matches` creates a match +
+  conversation only when the double-opt-in mutual-interest check from Phase 5 still
+  holds (re-verified server-side, never trusted from the client), and is idempotent for
+  an already-active pair. Chat runs on a Durable Object per conversation (`ChatRoom`,
+  keyed by `idFromName(conversationId)`): the Worker's `/conversations/:id/ws` route
+  re-verifies the session user is one of the match's two participants (the one IDOR
+  check everything else depends on) *before* forwarding the WebSocket upgrade to the
+  Durable Object, and attaches the caller's real user id and anonymous profile id as
+  trusted headers — trusted precisely because a client can never reach a Durable Object
+  directly, only through this authenticated Worker route. Messages persist to D1
+  (`sender_user_id` keeps backend accountability) but the DO broadcasts only
+  `senderProfileId` to connected clients — the real user id never reaches the wire.
+  `GET /conversations/:id/messages` serves history + marks the other side's messages
+  read. Frontend: a Connections list, a chat screen with live WebSocket send/receive,
+  and a "Connect" button surfaced directly on the `mutual_interest` notification.
+  Verified end-to-end: curl-driven match creation/listing, then a Node WebSocket client
+  proving two independently-authenticated sessions exchange real-time messages while a
+  third, unrelated user is rejected (403) from reading the conversation's history —
+  and the same flow (open connections → open chat → live send/receive across two
+  separate browser contexts) was exercised with a real headless-browser session.

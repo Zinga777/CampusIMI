@@ -6,6 +6,8 @@ import Login from "./pages/Login.js";
 import Onboarding from "./pages/Onboarding.js";
 import Feed from "./pages/Feed.js";
 import Confessions from "./pages/Confessions.js";
+import Matches from "./pages/Matches.js";
+import Chat from "./pages/Chat.js";
 import ProtectedRoute from "./components/ProtectedRoute.js";
 
 export default function App() {
@@ -36,6 +38,22 @@ export default function App() {
         element={
           <ProtectedRoute requireProfile>
             <Confessions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/matches"
+        element={
+          <ProtectedRoute requireProfile>
+            <Matches />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chat/:conversationId"
+        element={
+          <ProtectedRoute requireProfile>
+            <Chat />
           </ProtectedRoute>
         }
       />
