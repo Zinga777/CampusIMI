@@ -126,6 +126,11 @@ checks). `*_user_id` columns are **never** serialized in any public API response
   - `POST /api/v1/confessions`, `POST /api/v1/confessions/:id/respond`
   - `GET /api/v1/matches`, `GET/POST /api/v1/conversations/:id/messages` (client polls the
     GET endpoint with an `after` cursor for new messages — no WebSocket/Durable Object)
+  - `GET /api/v1/swipes/deck`, `POST /api/v1/swipes` — a second, parallel way to match:
+    the deck shows only avatar + nickname (no bio/gender/academic status pre-match); a
+    mutual right-swipe auto-creates the match + conversation via the same
+    `lib/matching.ts` `createMatch` helper the confession mutual-interest flow calls
+    through `POST /api/v1/matches`
   - `POST /api/v1/post-requests`, `POST /api/v1/post-requests/:id/image`,
     `GET /api/v1/post-requests/mine` — regular posts/comments reject links outright
     (`detectLink`); a link, poster/image, or urgent notice instead goes through this

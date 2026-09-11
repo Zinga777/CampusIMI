@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { fail, ok } from "../lib/response.js";
-import { randomId } from "../lib/crypto.js";
-import { createNotification } from "../lib/notifications.js";
+import { createMatch } from "../lib/matching.js";
 import { requireProfile } from "../middleware/auth.js";
 import type { Env, Variables } from "../types.js";
 
@@ -25,10 +24,6 @@ async function hasMutualInterest(env: Env, userAId: string, userAProfileId: stri
     .bind(userBId, userAProfileId)
     .first();
   return Boolean(aToB) && Boolean(bToA);
-}
-
-function pairKey(a: string, b: string): [string, string] {
-  return a < b ? [a, b] : [b, a];
 }
 
 matchRoutes.get("/", async (c) => {
@@ -79,39 +74,10 @@ matchRoutes.post("/", async (c) => {
     return fail(c, "NOT_MUTUAL", "You can only connect once you're both mutually interested.", 403);
   }
 
-  const [userAId, userBId] = pairKey(user.id, other.userId);
+  const result = await createMatch(c.env, user.id, other.userId);
+  if (result.ended) return fail(c, "MATCH_ENDED", "This connection has ended.", 409);
 
-  const existing = await c.env.DB.prepare(`SELECT id, status FROM matches WHERE user_a_id = ?1 AND user_b_id = ?2`)
-    .bind(userAId, userBId)
-    .first<{ id: string; status: string }>();
-
-  if (existing) {
-    if (existing.status === "unmatched" || existing.status === "blocked") {
-      return fail(c, "MATCH_ENDED", "This connection has ended.", 409);
-    }
-    const conversation = await c.env.DB.prepare(`SELECT id FROM conversations WHERE match_id = ?1`)
-      .bind(existing.id)
-      .first<{ id: string }>();
-    return ok(c, { matchId: existing.id, conversationId: conversation?.id });
-  }
-
-  const matchId = randomId();
-  const conversationId = randomId();
-  await c.env.DB.batch([
-    c.env.DB.prepare(`INSERT INTO matches (id, user_a_id, user_b_id, status) VALUES (?1, ?2, ?3, 'active')`).bind(
-      matchId,
-      userAId,
-      userBId,
-    ),
-    c.env.DB.prepare(`INSERT INTO conversations (id, match_id) VALUES (?1, ?2)`).bind(conversationId, matchId),
-  ]);
-
-  await Promise.all([
-    createNotification(c.env, user.id, "matched", { matchId, conversationId }),
-    createNotification(c.env, other.userId, "matched", { matchId, conversationId }),
-  ]);
-
-  return ok(c, { matchId, conversationId }, 201);
+  return ok(c, { matchId: result.matchId, conversationId: result.conversationId }, 201);
 });
 
 matchRoutes.post("/:id/unmatch", async (c) => {

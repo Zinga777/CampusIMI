@@ -29,6 +29,7 @@ rationale, database schema, and the security/anonymity threat model.
 | Moderation & safety (reports, blocks, rate limits, admin API, audit log) | ✅ Done |
 | Confessions + mutual-interest detection + notifications | ✅ Done |
 | Matching & anonymous chat (REST + polling, free-tier friendly) | ✅ Done |
+| Swipe-based discovery ("Discover" deck: avatar + nickname only, left/right swipe, mutual right-swipe auto-creates a match) alongside the existing confession-based matching | ✅ Done |
 | AI features (bio/post/conversation-starter suggestions) | ✅ Done — falls back to template suggestions with no `AI_API_KEY` configured; the same code path calls a real LLM once one is provided |
 | Campus events (create, RSVP/"interested") | ✅ Done |
 | Admin dashboard (stats, reports, posts, users, audit log) | ✅ Done |

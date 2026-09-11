@@ -7,6 +7,7 @@ import Onboarding from "./pages/Onboarding.js";
 import Feed from "./pages/Feed.js";
 import Confessions from "./pages/Confessions.js";
 import Matches from "./pages/Matches.js";
+import Discover from "./pages/Discover.js";
 import Chat from "./pages/Chat.js";
 import Events from "./pages/Events.js";
 import RequestPost from "./pages/RequestPost.js";
@@ -50,6 +51,14 @@ export default function App() {
         element={
           <ProtectedRoute requireProfile>
             <Matches />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/discover"
+        element={
+          <ProtectedRoute requireProfile>
+            <Discover />
           </ProtectedRoute>
         }
       />

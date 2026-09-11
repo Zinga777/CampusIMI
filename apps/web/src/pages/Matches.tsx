@@ -21,9 +21,17 @@ export default function Matches() {
   return (
     <div className="min-h-screen px-6 py-8">
       <div className="max-w-2xl mx-auto">
-        <Link to="/feed" className="text-sm text-campus-600 hover:text-campus-800">
-          ← Back to feed
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link to="/feed" className="text-sm text-campus-600 hover:text-campus-800">
+            ← Back to feed
+          </Link>
+          <Link
+            to="/discover"
+            className="px-4 py-1.5 rounded-full bg-campus-700 text-white text-sm font-medium hover:bg-campus-800"
+          >
+            Discover
+          </Link>
+        </div>
         <h1 className="mt-2 text-2xl font-semibold text-campus-900">Connections</h1>
 
         <div className="mt-6 space-y-3">
@@ -46,7 +54,8 @@ export default function Matches() {
           ))}
           {matches?.length === 0 && (
             <p className="text-center text-campus-500 py-8">
-              No connections yet. Mutual interest on a confession will unlock this.
+              No connections yet. Swipe right on someone in Discover, or get mutual interest on a
+              confession, to unlock a chat.
             </p>
           )}
         </div>

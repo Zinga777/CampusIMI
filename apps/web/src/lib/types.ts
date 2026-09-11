@@ -42,3 +42,12 @@ export interface Comment {
 }
 
 export type FeedMode = "trending" | "latest" | "discussed" | "popular";
+
+export interface DiscoverProfile {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  academicStatus: string;
+  gender: string;
+}
